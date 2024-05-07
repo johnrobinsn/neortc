@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Multimodal Chat</title>
+    <meta charset="UTF-8" />
+    <link href="/styles.css" rel="stylesheet" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+  </head>
+  <body>
+    <div id="panelcontainer">
+      <img id="menubutton" src='bars-solid.svg'><br/>
+      <div id="panel">
+        
+        <div id="watching"></div>
+        <div id="peers"></div>
+      </div>
+    </div>
+    
+    status:<div id='sockStatus'>disconnected</div>
+    peerStatus:<div id="peerStatus">peerStatus</div>    
+    <!-- <div style="visibility: collapse;"> -->
+    <section class="select">
+      <label for="audioSource">Audio source: </label>
+      <select id="audioSource"></select>
+    </section>
+
+    <section class="select">
+      <label for="videoSource">Video source: </label>
+      <select id="videoSource"></select>
+    </section>
+    
+  <!-- </div> -->
+
+    <!--local:-->
+    <!-- can pass in muted to video object to disable audio -->
+    <video id="local_video" playsinline autoplay muted></video> 
+ 
+    <br/>
+    <button id="talk-button">Push To Talk</button>
+
+    <!--    <hr/>
+    
+
+    remote:
+    <video id="remote_video" playsinline autoplay muted></video>
+    -->
+    <audio id="remote-audio" autoplay playsinline></audio>
+
+    <br/>
+    <div id="chat-log"></div>
+    <br/>
+
+    <div id="send-div">
+      <textarea id="sendTxt" rows="1" class="user" style="resize:none;width:100%;border:none;overflow:hidden;background-color:transparent;" oninput='this.style.height = "";this.style.height = this.scrollHeight + "px"'></textarea>
+    </div>
+    <button id="sendBtn">Send</button>
+    <br/>
+   
+    <script src="/socket.io.js"></script>
+    <script src="/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script>
+      $(document).ready((e)=>{
+        console.log('in onload')
+        $('#menubutton').click(function(){
+          console.log('clicked')
+          if ( $('#panel').css('visibility') == 'hidden' )
+            $('#panel').css('visibility','visible');
+          else
+            $('#panel').css('visibility','hidden');
+        })
+      })
+    </script>    
+  </body>
+</html>

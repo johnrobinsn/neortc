@@ -1,0 +1,8 @@
+*.pem
+clean/**
+static/clean/**
+__pycache__
+api_key.py
+*.pcm
+todo.md
+api_key_openai.py

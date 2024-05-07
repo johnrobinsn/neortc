@@ -1,0 +1,88 @@
+/*
+# styles.css
+
+# Copyright 2024 John Robinson
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+*/
+
+html {
+  overflow:hidden;
+  height:100%;
+}
+
+video {
+  height: 300px;
+  border-radius: 20px;
+}
+
+a {
+  font-size:xx-large;
+}
+
+#menubutton {
+  width:32px;
+  height:32px;
+  background-color: #00000030;
+  border-radius: 3px;
+}
+
+#panel {
+  background-color: #ffffffc0;
+  border-radius: 10px;
+  padding: 15px;
+  visibility: hidden;
+}
+
+#stats, #enable-audio {
+  visibility: collapse;
+}
+
+body {
+  background-color: #202020;
+  color:azure;
+}
+
+#chat-log {
+  border: 1px solid rgba(255, 255, 240, 0.5);
+  border-radius: 5px; 
+  height: 200px;
+  overflow-y: auto;
+}
+
+#send-div {
+  border: 1px solid rgba(255, 255, 240, 0.5);
+  border-radius: 5px;
+  padding: 4px;
+}
+
+#sendTxt:focus {outline: none;}
+
+#sendTxt:focus-visible {outline: none;}
+
+button {
+  background-color: #04AA6D;
+  border: none;
+  color: rgba(255, 255, 255, 0.90);
+  padding: 10px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 4px 2px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.user {color:aquamarine;}
+.assistant {color: lightblue;}
