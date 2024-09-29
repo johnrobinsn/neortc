@@ -16,9 +16,6 @@ openssl req -x509 -newkey rsa:2048 -keyout mykey.pem -out mycert.pem -days 3650 
     # if sio.handshake.query.token != token: 
     #     print('Access Denied')
     #     sio.disconnect(True)
-
-    token = 'whiter@bbit'
-
 leak... 
     https://github.com/aiortc/aiortc/issues/554
 
