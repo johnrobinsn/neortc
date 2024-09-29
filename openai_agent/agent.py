@@ -26,7 +26,9 @@ from socketio import AsyncClient
 from aiortc import RTCSessionDescription, RTCPeerConnection
 from aiortc.sdp import candidate_from_sdp
 
-SIGNAL_SERVER = 'wss://localhost:8443?token=whiter@bbit'
+SIGNAL_SERVER = 'wss://localhost:8443'
+from auth_neortc import neortc_secret
+
 
 enableTTS = True
 enableLLM = True
@@ -177,7 +179,7 @@ async def disconnect():
 
 async def start(*args):
     try:
-        await sio.connect(SIGNAL_SERVER, transports=['websocket'])
+        await sio.connect(SIGNAL_SERVER, auth={'token':neortc_secret},transports=['websocket'])
         await sio.wait()
     except KeyboardInterrupt:
         print('Exiting OpenAI Agent...')

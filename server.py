@@ -23,9 +23,10 @@ from os import kill, getpid
 from ssl import SSLContext, PROTOCOL_TLS_SERVER
 from asyncio import create_task
 from aiohttp import web
-from aiohttp.web_runner import GracefulExit
+# from aiohttp.web_runner import GracefulExit
 from socketio import AsyncServer
 
+from auth_neortc import neortc_secret
 from openai_agent.agent import start as start_oai
 
 peers = {} 
@@ -46,11 +47,18 @@ async def error(e):
 
 @sio.event
 async def captureAudio(sid,target_sid,f):
+    print('server.py captureAudio')
     await sio.emit('captureAudio', (f,), room=target_sid)
 
 @sio.event
-async def connect(sid,env):
-    await sio.emit('peersChanged', (peers,))
+async def connect(sid,env,auth):
+    token = auth.get('token') if auth else ''
+    if neortc_secret and token != neortc_secret:
+        print("auth failed; disonnecting")
+        return False
+    else:
+        await sio.emit('peersChanged', (peers,))
+
 
 @sio.event
 async def broadcaster(sid,info):
@@ -90,7 +98,11 @@ routes = web.RouteTableDef()
 
 @routes.get('/')
 async def handle_get(request):
-    return web.FileResponse('./static/index.html')
+    token = request.query.get('token', '')
+    if neortc_secret and token != neortc_secret:
+        return web.Response(text=".")
+    else:
+        return web.FileResponse('./static/index.html')
 
 routes.static('/', './static', show_index=False)
 
@@ -120,7 +132,7 @@ async def on_shutdown(app):
 
 app.on_shutdown.append(on_shutdown)
 
-default_host='localhost'
+default_host='*'
 default_port=8443
 
 ssl_context = SSLContext(PROTOCOL_TLS_SERVER)

@@ -32,7 +32,7 @@ from av import codec
 from av.packet import Packet
 from aiortc.mediastreams import MediaStreamTrack
 
-from api_key_openai import api_key
+from auth_openai import api_key
 
 packetq = []
 next_pts = 0

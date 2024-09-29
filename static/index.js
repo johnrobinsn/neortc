@@ -32,7 +32,7 @@ const config = {
 };
 
 const urlParams = new URLSearchParams(window.location.search);
-//console.log('url:', window.location.origin+'?token='+encodeURIComponent(urlParams.get('token')))
+// console.log('url:', window.location.origin+'?token='+encodeURIComponent(urlParams.get('token')))
 const peers = document.querySelector("#peers")
 const talkBtn = document.querySelector("#talk-button")
 const remoteAudio = document.querySelector('#remote-audio')
@@ -94,7 +94,7 @@ function neoRTC(url) {
     // get media
     // can I defer getting media...
     // can I renegotiate media
-    this.socket = io.connect(url)
+    this.socket = io.connect(url,{auth: {token: urlParams.get('token')}})
 
     this.socket.on("peersChanged", (peers)=>{
       this.peers = peers
@@ -123,6 +123,7 @@ function neoRTC(url) {
       this.socket.emit("watcher");
       this.connectStatus = true
       this.onConnectStatusChanged?.(this.connectStatus)
+      //window.rtc.rtcConnect()
     });
     
     this.socket.on("disconnect",()=>{
@@ -133,10 +134,19 @@ function neoRTC(url) {
       this.disconnect() 
     })
 
+    // check to see if socket is already disconnected prior to registering
+    // ondisconnect handler
+    // console.log('socket status:', this.socket)
+    // if (this.socket.disconnected) {
+    //   this.connectStatus = false
+    //   this.onConnectStatusChanged?.(this.connectStatus)
+    //   this.disconnect() 
+    // }
+
     this.socket.on("onMessage", (id, m)=>{
       console.log('client:', m)
   
-      h = `<div class="${m.role}"><b>${m.role}: </b> ${m.content[0].text}</div>`
+      h = `<div class="${m.role}"><pre><b>${m.role}:</b> ${m.content[0].text}</pre></div>`
       chatLog.innerHTML = chatLog.innerHTML + h
     })    
   }
@@ -247,7 +257,7 @@ function listen(f) {
     talkBtn.innerHTML = 'Push To Talk'
   }
   // todo
-  window.rtc.socket.emit('captureAudio',target,f)
+  window.rtc.socket.emit('captureAudio',window.rtc.rtcTargetId,f)
 }
 
 talkBtn.addEventListener('pointerdown',(e)=>{

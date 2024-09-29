@@ -16,13 +16,16 @@ import logging
 #logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-from time import time
+from multiprocessing import Process, Queue
+import asyncio
+
 import numpy as np
+from transformers import pipeline
 
 from aiortc.mediastreams import MediaStreamError
-from openai_agent.llm_openai import prompt
-from transformers import pipeline
 from samplerate import resample
+
+from openai_agent.llm_openai import prompt
 
 whisper_sample_rate = 16000
 
@@ -40,27 +43,13 @@ async def setCaptureAudio(f):
     if capturingAudio == f:
         return
     capturingAudio = f
-    #print('Capturing Audio:', f)
-    # todo probably set minumum number of frames to something meaningful
+    print('Capturing Audio:', f)
+    # TODO probably set minumum number of frames to something meaningful
     if not capturingAudio and len(audio) > 0: # on end of capture send to asr
-        start_time = time.time()
-
-        #if self.recording:
-        #sample_rate = frame.sample_rate
-        #num_channels = len(frame.layout.channels)
-
-        #audio_frames.append(frame.to_ndarray())
-        #print('num channels:',num_channels)
-        #print('audio len:', len(audio))
-        #print('audio:',audio[0])
         buffer = np.concatenate(audio,axis=1)
-        #print('shape1:', buffer.shape)
-        #print('buffer shape:', buffer.shape)
         # take the mean across channels to reduce to a single channel
         buffer = buffer.mean(axis=0)
         buffer = buffer[::num_channels]
-        #print('shape2:', buffer.shape)
-        #print("old:", len(buffer))
         buffer.astype(np.int16).tofile('foo48.pcm')
 
         ratio = whisper_sample_rate / sample_rate
@@ -76,29 +65,9 @@ async def setCaptureAudio(f):
         
         
         float_buffer = buffer.astype(np.float32) / np.iinfo(np.int16).max
-        #print("new:", len(float_buffer))
 
-        #print(buffer)
-        #print(asr(float_buffer))
         t = await speech2Text(float_buffer)
-        #print(t)
         await prompt(t['text'])
-        # if not isopen:
-        #     pya = pyaudio.PyAudio()
-        #     stream = pya.open(format=pya.get_format_from_width(width=2), channels=num_channels, rate=sample_rate, output=True)
-
-
-        #print("audio frame:", len(frame.to_ndarray()[0])) # multi channels
-        #print(frame.to_ndarray().dtype)
-        #print("audio frame:", frame.to_ndarray())
-
-        #sa.play_buffer(buffer, num_channels, 2, sample_rate)
-
-        # stream.write(buffer)
-
-        #print(buffer)
-        # clear buffer
-        #print("--- %s seconds ---" % (time.time() - start_time))
     audio = []
 
 #dirty
@@ -114,36 +83,18 @@ async def handle_audio(track):
     while True:        
         try:
             frame = await track.recv()
-            continue
 
             if not capturingAudio:
                 continue # drop frame
 
-            #continue
-
             sample_rate = frame.sample_rate
-            #print('sample_rate:', sample_rate)
             num_channels = len(frame.layout.channels)
-            #print('frame shape:', frame.to_ndarray().shape)
             audio.append(frame.to_ndarray())
 
-            # if len(audio) < 250:
-            #     continue
-
-            # print("trying asr")
-
-
-            #audio = []
         except MediaStreamError:
             # This exception is raised when the track ends
             break
 
-    # stream.stop_stream()
-    # stream.close()
-    # logger.info(f"Exited audio processing loop")
-
-from multiprocessing import Process, Queue
-import asyncio
 
 class Worker:
     def __init__(self):
@@ -158,8 +109,10 @@ class Worker:
     @staticmethod
     def loop(inQ: Queue, outQ: Queue):
         try:
-            #asr = pipeline("automatic-speech-recognition",model="openai/whisper-large-v3",device=0)
-            asr = pipeline("automatic-speech-recognition",model="openai/whisper-large-v3",device='cpu')
+            # asr = pipeline("automatic-speech-recognition",model="openai/whisper-large-v3",device=0)
+            # asr = pipeline("automatic-speech-recognition",model="openai/whisper-tiny.en",device=0)
+            asr = pipeline("automatic-speech-recognition",model="openai/whisper-tiny",device='cpu')
+            print('Starting Whisper',asr)
 
             while True:
                 command, args = inQ.get()

@@ -20,7 +20,7 @@ import datetime
 import json
 
 from openai import AsyncOpenAI
-from api_key_openai import api_key
+from auth_openai import api_key
 
 client = AsyncOpenAI(api_key=api_key)
 
