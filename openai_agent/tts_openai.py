@@ -32,7 +32,9 @@ from av import codec
 from av.packet import Packet
 from aiortc.mediastreams import MediaStreamTrack
 
-from auth_openai import api_key
+# from auth_openai import api_key
+from config import config
+openai_api_key = config.get('openai_api_key')
 
 packetq = []
 next_pts = 0
@@ -179,7 +181,7 @@ async def requestTTS(t, callback):
     url = 'https://api.openai.com/v1/audio/speech'
 
     headers = {
-        'Authorization': f'Bearer {api_key}',
+        'Authorization': f'Bearer {openai_api_key}',
         'Content-Type': 'application/json',
     }
 

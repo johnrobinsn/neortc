@@ -26,8 +26,13 @@ from socketio import AsyncClient
 from aiortc import RTCSessionDescription, RTCPeerConnection
 from aiortc.sdp import candidate_from_sdp
 
-SIGNAL_SERVER = 'wss://localhost:8443'
-from auth_neortc import neortc_secret
+from config import config
+
+# TODO silent error if connection fails
+SIGNAL_SERVER = f'wss://localhost:{config.get("neortc_port")}'
+# from auth_neortc import neortc_secret
+from config import config
+neortc_secret = config.get('neortc_secret')
 
 
 enableTTS = True

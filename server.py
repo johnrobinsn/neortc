@@ -19,6 +19,9 @@ import logging
 #logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+from config import config
+neortc_secret = config.get('neortc_secret')
+
 from os import kill, getpid
 from ssl import SSLContext, PROTOCOL_TLS_SERVER
 from asyncio import create_task
@@ -26,7 +29,7 @@ from aiohttp import web
 # from aiohttp.web_runner import GracefulExit
 from socketio import AsyncServer
 
-from auth_neortc import neortc_secret
+# from auth_neortc import neortc_secret
 from openai_agent.agent import start as start_oai
 
 peers = {} 
@@ -133,7 +136,8 @@ async def on_shutdown(app):
 app.on_shutdown.append(on_shutdown)
 
 default_host='*'
-default_port=8443
+# default_port=8443
+default_port = config.get('neortc_port')
 
 ssl_context = SSLContext(PROTOCOL_TLS_SERVER)
 ssl_context.load_cert_chain('./mycert.pem','./mykey.pem')

@@ -20,9 +20,11 @@ import datetime
 import json
 
 from openai import AsyncOpenAI
-from auth_openai import api_key
+# from auth_openai import api_key
+from config import config
+openai_api_key = config.get('openai_api_key')
 
-client = AsyncOpenAI(api_key=api_key)
+client = AsyncOpenAI(api_key=openai_api_key)
 
 #dirty
 local_dt = datetime.datetime.utcnow()
