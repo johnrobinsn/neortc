@@ -110,7 +110,13 @@ function neoRTC(url) {
       }
     })
 
-    // internal housekeeping... 
+    this.socket.on("candidate", (id, candidate) => {
+      console.log('candidate:', candidate)
+      //peerConnections[id].addIceCandidate(new RTCIceCandidate(canwindow.location.origindate));
+      this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    });
+
+	  // internal housekeeping... 
     // this.socket.on("disconnectPeer", id => {
     //   console.log('disconnectPeer', id)
     //   this.peerConnection.close();

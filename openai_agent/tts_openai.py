@@ -19,7 +19,7 @@
 # while the http request is still ongoing.
 
 import logging
-#logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 import struct

@@ -17,19 +17,20 @@
 # limitations under the License.
 
 import logging
-#logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 import re
 import asyncio
 from socketio import AsyncClient
-from aiortc import RTCSessionDescription, RTCPeerConnection
+from aiortc import RTCSessionDescription, RTCPeerConnection, RTCConfiguration, RTCIceServer
 from aiortc.sdp import candidate_from_sdp
 
 from config import config
 
 # TODO silent error if connection fails
 SIGNAL_SERVER = f'wss://localhost:{config.get("neortc_port")}'
+print("SIGNAL_SERVER:", SIGNAL_SERVER)
 # from auth_neortc import neortc_secret
 from config import config
 neortc_secret = config.get('neortc_secret')
@@ -52,6 +53,7 @@ connected=False
 
 @sio.event
 async def connect():
+    print("agent onconnect")
     global sio
     global connected
     log.info('Watcher Connected')
@@ -77,7 +79,10 @@ def setupPeer():
     global sio
     global connected
 
-    peer = RTCPeerConnection()
+    peer = RTCPeerConnection(configuration=RTCConfiguration([
+            RTCIceServer("stun:stun.l.google.com:19302"),
+            #RTCIceServer("turn:turnserver.cidaas.de:3478?transport=udp", "user", "pw"),
+            ]))
 
     # add media tracks
     if enableTTS:
@@ -89,6 +94,11 @@ def setupPeer():
         if peer.connectionState == 'closed':
             await close()
 
+    # Log ICE gathering state
+    @peer.on("icegatheringstatechange")
+    async def on_ice_gathering_state_change():
+        log.info(f"ICE gathering state changed: {peer.iceGatheringState}")
+
     @peer.on("icecandidate")
     async def on_icecandidate(candidate):
         log.info('pc on ice candidate', sio, candidate)
@@ -98,6 +108,7 @@ def setupPeer():
     async def on_track(track):
         # guard to do this just once... 
         if (track.kind == 'audio'):
+            # pass
             asyncio.create_task(handle_audio(track))
         elif (track.kind == 'video'):
             # asyncio.create_task(handle_video(track))
@@ -129,6 +140,7 @@ async def sendText(t):
 @sio.event
 async def captureAudio(f):
     await setCaptureAudio(f)
+    # pass
 
 @sio.event
 async def broadcaster():
@@ -184,10 +196,15 @@ async def disconnect():
 
 async def start(*args):
     try:
+        print("agent connect to signal server")
         await sio.connect(SIGNAL_SERVER, auth={'token':neortc_secret},transports=['websocket'])
+        # TODO do I need this wait?
+        print("after agent connect")
         await sio.wait()
-    except KeyboardInterrupt:
-        print('Exiting OpenAI Agent...')
+    #except KeyboardInterrupt:
+    #    print('Exiting OpenAI Agent...')
+    except Exception as e:
+        print("connection exception:", e)
 
 # async def start():
 #     await sio.connect(SIGNAL_SERVER, transports=['websocket'])

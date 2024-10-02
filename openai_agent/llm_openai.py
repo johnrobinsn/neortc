@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import logging
-#logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 import datetime

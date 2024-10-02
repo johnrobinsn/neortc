@@ -16,7 +16,7 @@
 # limitations under the License.
 
 import logging
-#logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 from config import config
@@ -55,6 +55,7 @@ async def captureAudio(sid,target_sid,f):
 
 @sio.event
 async def connect(sid,env,auth):
+    print("in bound connection")
     token = auth.get('token') if auth else ''
     if neortc_secret and token != neortc_secret:
         print("auth failed; disonnecting")
@@ -114,10 +115,12 @@ sio.attach(app)
 app.add_routes(routes)
 
 async def start_background_tasks(app):
+    print("starting tasks")
     app['tasks'] = []
     app['tasks'].append(create_task(start_oai()))
 
 async def cleanup_background_tasks(app):
+    print("cleaning up tasks")
     for t in app['tasks']:
         log.info('shutting down openai')
         t.cancel()
@@ -142,4 +145,5 @@ default_port = config.get('neortc_port')
 ssl_context = SSLContext(PROTOCOL_TLS_SERVER)
 ssl_context.load_cert_chain('./mycert.pem','./mykey.pem')
 
+print("Starting webserver port:", default_port)
 web.run_app(app, host=default_host, port=default_port, ssl_context=ssl_context)
