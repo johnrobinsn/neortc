@@ -30,7 +30,7 @@ from aiohttp import web
 from socketio import AsyncServer
 
 # from auth_neortc import neortc_secret
-from openai_agent.agent import start as start_oai
+# from openai_agent.agent import start as start_oai
 
 peers = {} 
 
@@ -127,8 +127,9 @@ async def cleanup_background_tasks(app):
         await t
     log.info('done shutting down tasks')
 
-app.on_startup.append(start_background_tasks)
-app.on_cleanup.append(cleanup_background_tasks)
+if False:
+    app.on_startup.append(start_background_tasks)
+    app.on_cleanup.append(cleanup_background_tasks)
 
 
 async def on_shutdown(app):

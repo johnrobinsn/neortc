@@ -26,22 +26,26 @@ from socketio import AsyncClient
 from aiortc import RTCSessionDescription, RTCPeerConnection, RTCConfiguration, RTCIceServer
 from aiortc.sdp import candidate_from_sdp
 
-from config import config
+from aconfig import config
 
 # TODO silent error if connection fails
 SIGNAL_SERVER = f'wss://localhost:{config.get("neortc_port")}'
 print("SIGNAL_SERVER:", SIGNAL_SERVER)
 # from auth_neortc import neortc_secret
-from config import config
+#from config import config
 neortc_secret = config.get('neortc_secret')
 
 
 enableTTS = True
 enableLLM = True
+enableSTT = True
 
-from openai_agent.stt_whisper import handle_audio, setCaptureAudio
-from openai_agent.tts_openai import tts_track,say
-from openai_agent.llm_openai import prompt, setMessageListener, getMessages
+if enableSTT:
+    from stt_whisper import handle_audio, setCaptureAudio, startWhisper
+if enableTTS:
+    from tts_openai import tts_track,say
+if enableLLM:
+    from llm_openai import prompt, setMessageListener, getMessages
 
 sio = AsyncClient(ssl_verify=False)
 
@@ -194,17 +198,17 @@ async def disconnect():
     #     #self.peer.term()
     #     self.peer = None
 
-async def start(*args):
+async def start(signal_server=SIGNAL_SERVER):
     try:
-        print("agent connect to signal server")
+        startWhisper()
         await sio.connect(SIGNAL_SERVER, auth={'token':neortc_secret},transports=['websocket'])
         # TODO do I need this wait?
-        print("after agent connect")
-        await sio.wait()
-    #except KeyboardInterrupt:
-    #    print('Exiting OpenAI Agent...')
+        #await sio.wait()
+    # except KeyboardInterrupt:
+    #     print('Exiting OpenAI Agent...')
     except Exception as e:
-        print("connection exception:", e)
+        print('Exception received'. e)
+
 
 # async def start():
 #     await sio.connect(SIGNAL_SERVER, transports=['websocket'])
@@ -223,5 +227,15 @@ async def start(*args):
 #     loop.create_task(start())
 
 
-# if __name__ == "__main__":
-#     asyncio.run(start())
+if __name__ == "__main__":
+    signal_server = config.get('agent_signal_server','')
+    if not signal_server:
+        log.error('No signal server defined')
+        exit(0)
+    else:
+        log.info('Attempting connection to %s', signal_server)
+    try:
+        asyncio.run(start())
+    except Exception as e:
+        print('Exception2 received', e)
+

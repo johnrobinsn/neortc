@@ -25,7 +25,9 @@ from transformers import pipeline
 from aiortc.mediastreams import MediaStreamError
 from samplerate import resample
 
-from openai_agent.llm_openai import prompt
+# from openai_agent.llm_openai import prompt
+# from .. import llm_openai.prompt
+from llm_openai import prompt
 
 whisper_sample_rate = 16000
 
@@ -134,7 +136,9 @@ class Worker:
             self.inQ.put(task)
             return await asyncio.get_running_loop().run_in_executor(None, self.outQ.get)
 
-w = Worker()
+def startWhisper():
+    global w
+    w = Worker()
 
 async def speech2Text(float_buffer):
     return await w.send('stt',(float_buffer,))

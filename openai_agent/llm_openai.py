@@ -21,7 +21,8 @@ import json
 
 from openai import AsyncOpenAI
 # from auth_openai import api_key
-from config import config
+from aconfig import config
+
 openai_api_key = config.get('openai_api_key')
 
 client = AsyncOpenAI(api_key=openai_api_key)

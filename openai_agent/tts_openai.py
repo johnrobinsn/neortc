@@ -33,7 +33,8 @@ from av.packet import Packet
 from aiortc.mediastreams import MediaStreamTrack
 
 # from auth_openai import api_key
-from config import config
+from aconfig import config
+
 openai_api_key = config.get('openai_api_key')
 
 packetq = []
