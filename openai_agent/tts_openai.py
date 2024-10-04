@@ -227,7 +227,8 @@ async def say(t):
         global packetq
         nonlocal start
         if start:
-            log.info('time to first segment:', (datetime.now()-start).total_seconds())
+            # log.info('time to first segment:', (datetime.now()-start).total_seconds())
+            print('first segment')
             start = None
 
         if gsample_rate != sample_rate or gchannels != channels:

@@ -151,7 +151,7 @@ watch_sid = None
 @sio.event
 async def offer(id,message):  # initiating message; id is watching
     global watch_sid
-    log.info('offer received', id, message)
+    # log.info('offer received', id, message)
 
     setupPeer()
     watch_sid = id

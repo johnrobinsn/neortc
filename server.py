@@ -56,7 +56,7 @@ async def captureAudio(sid,target_sid,f):
 @sio.event
 async def connect(sid,env,auth):
     print("in bound connection")
-    token = auth.get('token') if auth else ''
+    token = auth.get('token','')
     if neortc_secret and token != neortc_secret:
         print("auth failed; disonnecting")
         return False
