@@ -98,7 +98,7 @@ function neoRTC(url) {
 
     this.socket.on("peersChanged", (peers)=>{
       this.peers = peers
-      console.log('peers received')
+      console.log('peers received:', peers)
       this.onPeersChanged?.(peers)
     })
   
@@ -212,12 +212,19 @@ function neoRTC(url) {
       }
       // else if (e.track.kind=="video") {
       //   remoteVideo.srcObject = e.streams[0]
-      // }id
+      // }
+      // if (e.candidate) {
+      //   this.socket.emit("candidate", this.rtcTargetId, e.candidate);
+      // }
+      // this.onIceCandidate?.(e)
+    };
+
+    this.peerConnection.onicecandidate = e=>{
       if (e.candidate) {
         this.socket.emit("candidate", this.rtcTargetId, e.candidate);
       }
-      this.onIceCandidate?.(e)
-    };
+      this.onIceCandidate?.(e)      
+    }
   
     this.peerConnection.onconnectionstatechange = e => {
       //peerStatus.innerHTML = this.peerConnection.connectionState
@@ -489,6 +496,7 @@ function handleError(error) {
 }
 
 window.onload = ()=>{
+  document.querySelector('#version').innerHTML = '3';
   rtc = new neoRTC()
   rtc.onConnectStatusChanged = (f)=>{
     sockStatus.innerHTML = f?'connected':'disconnected'
