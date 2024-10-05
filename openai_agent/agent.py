@@ -30,7 +30,6 @@ from aconfig import config
 
 # TODO silent error if connection fails
 SIGNAL_SERVER = f'wss://localhost:{config.get("neortc_port")}'
-print("SIGNAL_SERVER:", SIGNAL_SERVER)
 # from auth_neortc import neortc_secret
 #from config import config
 neortc_secret = config.get('neortc_secret')
@@ -57,16 +56,26 @@ connected=False
 
 @sio.event
 async def connect():
-    print("agent onconnect")
     global sio
     global connected
+    log.info("ws onconnect")
+
     log.info('Watcher Connected')
     await sio.emit('watcher')
 
     displayName = 'oai_agent'
 
+    # print('broadcasting:', displayName)
     await sio.emit("broadcaster", {'displayName':displayName});
     connected = True
+
+@sio.event
+def ping(sid):
+    logging.info(f'Received ping from client: {sid}')
+
+@sio.event
+def pong(sid):
+    logging.info(f'Received pong from client: {sid}')
 
 # Note: aiortc leaks if we don't consume the media frames...
 async def drop_media_data(track):
@@ -96,7 +105,7 @@ def setupPeer():
     async def on_connectionstatechange():
         log.info(f"*** peer.connectionState = {peer.connectionState}")
         if peer.connectionState == 'closed':
-            await close()
+            await sio.disconnect() #close()
 
     # Log ICE gathering state
     @peer.on("icegatheringstatechange")
@@ -105,7 +114,7 @@ def setupPeer():
 
     @peer.on("icecandidate")
     async def on_icecandidate(candidate):
-        log.info('pc on ice candidate', sio, candidate)
+        log.info('pc on ice candidate %s %s', sio, candidate)
         sio.emit("candidate", (sio, candidate), room=broadcaster)
 
     @peer.on("track")
@@ -175,7 +184,7 @@ async def offer(id,message):  # initiating message; id is watching
 
 @sio.event
 async def candidate(id,message):
-    log.info('candidate received', id, message)
+    log.info('candidate received, %s, %s', id, message)
     if peer != None:
         c = candidate_from_sdp(message["candidate"].split(":", 1)[1])
         c.sdpMid = message['sdpMid']
@@ -192,22 +201,27 @@ async def disconnectPeer(id):
 
 @sio.event
 async def disconnect():
-    #log.info('Watcher Disconnected')
+    log.info('Watcher Disconnected')
     setMessageListener(None)
     # if self.peer is not None:
     #     #self.peer.term()
     #     self.peer = None
 
+# @sio.event
+# async def blahblah():
+#     print('blahblah')
+
 async def start(signal_server=SIGNAL_SERVER):
+    # print('signal server:', signal_server)
+    log.warn('signal server: %s', signal_server)
     try:
         startWhisper()
-        await sio.connect(SIGNAL_SERVER, auth={'token':neortc_secret},transports=['websocket'])
-        # TODO do I need this wait?
-        #await sio.wait()
+        await sio.connect(signal_server, auth={'token':neortc_secret},transports=['websocket'])
+        await sio.wait()
     # except KeyboardInterrupt:
     #     print('Exiting OpenAI Agent...')
     except Exception as e:
-        print('Exception received'. e)
+        print('Exception received', e)
 
 
 # async def start():
@@ -226,7 +240,7 @@ async def start(signal_server=SIGNAL_SERVER):
 #     loop = asyncio.get_event_loop()
 #     loop.create_task(start())
 
-
+import traceback
 if __name__ == "__main__":
     signal_server = config.get('agent_signal_server','')
     if not signal_server:
@@ -235,7 +249,8 @@ if __name__ == "__main__":
     else:
         log.info('Attempting connection to %s', signal_server)
     try:
-        asyncio.run(start())
+        asyncio.run(start(signal_server))
     except Exception as e:
+        print(traceback.format_exc())
         print('Exception2 received', e)
 
