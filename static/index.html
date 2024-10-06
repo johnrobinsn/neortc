@@ -4,8 +4,10 @@
     <title>Multimodal Chat</title>
     <meta charset="UTF-8" />
     <link href="/styles.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   </head>
   <body>
     <div id="panelcontainer">
@@ -14,50 +16,39 @@
         
         <div id="watching"></div>
         <div id="peers"></div>
+
+        version:<div id="version"></div>
+
+        status:<div id='sockStatus'>disconnected</div>
+        peerStatus:<div id="peerStatus">peerStatus</div>    
+        <!-- <div style="visibility: collapse;"> -->
+        <section class="select">
+          <label for="audioSource">Audio source: </label>
+          <select id="audioSource"></select>
+        </section>
+    
+        <section class="select">
+          <label for="videoSource">Video source: </label>
+          <select id="videoSource"></select>
+        </section>        
+
+        <video id="local_video" playsinline autoplay muted></video> 
+
+        <button id="talk-button">...</button>
+
       </div>
     </div>
-    
-    version:<div id="version"></div>
 
-    status:<div id='sockStatus'>disconnected</div>
-    peerStatus:<div id="peerStatus">peerStatus</div>    
-    <!-- <div style="visibility: collapse;"> -->
-    <section class="select">
-      <label for="audioSource">Audio source: </label>
-      <select id="audioSource"></select>
-    </section>
-
-    <section class="select">
-      <label for="videoSource">Video source: </label>
-      <select id="videoSource"></select>
-    </section>
-    
-  <!-- </div> -->
-
-    <!--local:-->
-    <!-- can pass in muted to video object to disable audio -->
-    <video id="local_video" playsinline autoplay muted></video> 
- 
-    <br/>
-    <button id="talk-button">Push To Talk</button>
-
-    <!--    <hr/>
-    
-
-    remote:
-    <video id="remote_video" playsinline autoplay muted></video>
-    -->
     <audio id="remote-audio" autoplay playsinline></audio>
 
-    <br/>
+    <div class="chat-container">
     <div id="chat-log"></div>
-    <br/>
 
     <div id="send-div">
-      <textarea id="sendTxt" rows="1" class="user" style="resize:none;width:100%;border:none;overflow:hidden;background-color:transparent;" oninput='this.style.height = "";this.style.height = this.scrollHeight + "px"'></textarea>
+      <textarea id="sendTxt" class="user"></textarea>
+      <button id="sendBtn"><i class="fa-solid fa-microphone"></i></button>
     </div>
-    <button id="sendBtn">Send</button>
-    <br/>
+  </div>
    
     <script src="/socket.io.js"></script>
     <script src="/index.js"></script>

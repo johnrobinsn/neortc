@@ -16,9 +16,16 @@
 # limitations under the License.
 */
 
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 html {
   overflow:hidden;
   height:100%;
+  font-size:x-large;
 }
 
 video {
@@ -26,9 +33,9 @@ video {
   border-radius: 20px;
 }
 
-a {
+/* a {
   font-size:xx-large;
-}
+} */
 
 #menubutton {
   width:32px;
@@ -38,10 +45,15 @@ a {
 }
 
 #panel {
-  background-color: #ffffffc0;
+  background-color: #797070c0;
   border-radius: 10px;
   padding: 15px;
   visibility: hidden;
+}
+#panelcontainer {
+  position: absolute;
+  top: 25px;
+  left: 25px;
 }
 
 #stats, #enable-audio {
@@ -50,36 +62,73 @@ a {
 
 body {
   background-color: #202020;
-  color:azure;
+  /* color:azure; */
+  height: 100%;
+  overflow: hidden;
+  display: flex;
 }
 
 #chat-log {
   border: 1px solid rgba(255, 255, 240, 0.5);
   border-radius: 5px; 
-  height: 200px;
   overflow-y: auto;
+  flex: 1;
+  margin: 10px;
+  /* padding: 10px; */
+  /* height: 80vh; Reserves space for input area */
 }
 
-#send-div {
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  /* height: calc(100vh - 140px); Takes full height */
+  height: 100dvh;
+  overflow: hidden;
+  /* position: fixed; */
+}
+
+/* #send-div {
   border: 1px solid rgba(255, 255, 240, 0.5);
   border-radius: 5px;
   padding: 4px;
+} */
+
+#send-div {
+  display: flex;
+  /* padding: 10px; */
+  margin: 4px 8px 14px 8px;
+  max-height: 200px; /* Prevents textarea from growing too large */
+  /* overflow-y: auto;   */
+  flex-shrink: 0;
 }
 
 #sendTxt:focus {outline: none;}
 
 #sendTxt:focus-visible {outline: none;}
 
+#sendTxt {
+  flex: 1;
+  padding: 2px;
+  background-color: #797070c0;
+  /* border: 1px solid #ccc; */
+  border-radius: 5px;
+  /* font-size: xx-large; */
+  margin: 4px;
+  resize: none;
+  font-size: 16px;
+}
+
 button {
   background-color: #04AA6D;
   border: none;
   color: rgba(255, 255, 255, 0.90);
-  padding: 10px;
+  padding: 6px 16px 6px 16px;
   text-align: center;
   text-decoration: none;
   display: inline-block;
-  font-size: 32px;
-  margin: 4px 2px;
+  /* font-size: 32px; */
+  margin: 0px 0px 0px 6px;
   cursor: pointer;
   border-radius: 8px;
   user-select: none;

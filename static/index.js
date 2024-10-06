@@ -209,6 +209,14 @@ function neoRTC(url) {
       if (e.track.kind=="audio") {
         console.log('audio stream received')
         remoteAudio.srcObject = e.streams[0]
+        // remoteAudio.setAttribute('playsinline', true)
+        // remoteAudio.play()
+
+        // const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // const source = audioContext.createMediaStreamSource(e.streams[0]);
+        // const destination = audioContext.createMediaStreamDestination();
+        // source.connect(destination);        
+
       }
       // else if (e.track.kind=="video") {
       //   remoteVideo.srcObject = e.streams[0]
@@ -247,39 +255,48 @@ function sendPrompt() {
     window.rtc.sendText(sendTxt.value)
     chatLog.innerHTML = chatLog.innerHTML + sendTxt.value
     sendTxt.value = ''
+    sendBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>'
 }
 
-sendBtn.addEventListener('click',(e)=>{
-  sendPrompt()
-})
+// sendBtn.addEventListener('click',(e)=>{
+//   sendPrompt()
+// })
 
 sendTxt.addEventListener("keydown",(e)=>{
   if(e.keyCode == 13 && !e.shiftKey) {
     sendPrompt()
+    e.preventDefault()
   }
 });
+
+sendTxt.addEventListener("input", (e)=>{
+  sendBtn.innerHTML = (sendTxt.value.length > 0)?'<i class="fa-solid fa-paper-plane"></i>':'<i class="fa-solid fa-microphone"></i>'
+})
 
 let listening = false
 function listen(f) {
   if (f==listening) return;
   listening = f
   if (listening) {
-    talkBtn.innerHTML = 'Listening'
+    sendBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>'
   }
   else {
-    talkBtn.innerHTML = 'Push To Talk'
+    sendBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>'
   }
   // todo
   window.rtc.socket.emit('captureAudio',window.rtc.rtcTargetId,f)
 }
 
-talkBtn.addEventListener('pointerdown',(e)=>{
-  talkBtn.setPointerCapture(e.pointerId)
-  listen(true)
+sendBtn.addEventListener('pointerdown',(e)=>{
+  sendBtn.setPointerCapture(e.pointerId)
+  if (sendTxt.value.length == 0)
+    listen(true)
 })
-talkBtn.addEventListener('pointerup',(e)=>{
-  talkBtn.releasePointerCapture(e.pointerId)
-  listen(false)
+sendBtn.addEventListener('pointerup',(e)=>{
+  sendBtn.releasePointerCapture(e.pointerId)
+  if (sendTxt.value.length == 0)
+    listen(false)
+  else sendPrompt()
 })
 
 // function watch(id) {
