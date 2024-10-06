@@ -46,7 +46,7 @@ if enableTTS:
 if enableLLM:
     from llm_openai import prompt, setMessageListener, getMessages
 
-sio = AsyncClient(ssl_verify=False)
+sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
 
 match = '.'
 broadcaster = None
