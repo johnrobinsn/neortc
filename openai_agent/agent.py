@@ -34,7 +34,6 @@ SIGNAL_SERVER = f'wss://localhost:{config.get("neortc_port")}'
 #from config import config
 neortc_secret = config.get('neortc_secret')
 
-
 enableTTS = True
 enableLLM = True
 enableSTT = True
@@ -46,182 +45,202 @@ if enableTTS:
 if enableLLM:
     from llm_openai import prompt, setMessageListener, getMessages
 
-sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
+class Agent:
+    def __init__(self):
+        # self.sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
+        self.sio = AsyncClient(ssl_verify=False)
+        self.connected = False
+        self.peer = None
+        self.callbacks()
+        self.watch_sid = None
 
-match = '.'
-broadcaster = None
-peer = None
-
-connected=False
-
-@sio.event
-async def connect():
-    global sio
-    global connected
-    log.info("ws onconnect")
-
-    log.info('Watcher Connected')
-    await sio.emit('watcher')
-
-    displayName = 'oai_agent'
-
-    # print('broadcasting:', displayName)
-    await sio.emit("broadcaster", {'displayName':displayName});
-    connected = True
-
-@sio.event
-def ping(sid):
-    logging.info(f'Received ping from client: {sid}')
-
-@sio.event
-def pong(sid):
-    logging.info(f'Received pong from client: {sid}')
-
-# Note: aiortc leaks if we don't consume the media frames...
-async def drop_media_data(track):
+    async def start(self,signal_server=SIGNAL_SERVER):
+        # print('signal server:', signal_server)
+        log.warning('signal server: %s', signal_server)
         try:
-            while True:
-                await track.recv()
-        except:
-            pass
+            startWhisper()
+            await self.sio.connect(signal_server, auth={'token':neortc_secret},transports=['websocket'])
+            await self.sio.wait()
+        # except KeyboardInterrupt:
+        #     print('Exiting OpenAI Agent...')
+        except Exception as e:
+            print('Exception received', e)        
 
-def setupPeer():
-    global peer
-    global broadcaster
-    global match
-    global sio
-    global connected
 
-    peer = RTCPeerConnection(configuration=RTCConfiguration([
-            RTCIceServer("stun:stun.l.google.com:19302"),
-            #RTCIceServer("turn:turnserver.cidaas.de:3478?transport=udp", "user", "pw"),
-            ]))
+    def setupPeer(self):
 
-    # add media tracks
-    if enableTTS:
-        peer.addTrack(tts_track())
+        self.peer = RTCPeerConnection(configuration=RTCConfiguration([
+                RTCIceServer("stun:stun.l.google.com:19302"),
+                #RTCIceServer("turn:turnserver.cidaas.de:3478?transport=udp", "user", "pw"),
+                ]))
+        
+        @self.peer.on("datachannel")
+        async def on_datachannel(channel):
+            print('*** channel created')
+            @channel.on('message')
+            async def on_message(message):
+                print(f'Received Message: {message}')
+                if isinstance(message,str) and message=='ping':
+                    channel.send("pong")
 
-    @peer.on("connectionstatechange")
-    async def on_connectionstatechange():
-        log.info(f"*** peer.connectionState = {peer.connectionState}")
-        if peer.connectionState == 'closed':
-            await sio.disconnect() #close()
 
-    # Log ICE gathering state
-    @peer.on("icegatheringstatechange")
-    async def on_ice_gathering_state_change():
-        log.info(f"ICE gathering state changed: {peer.iceGatheringState}")
 
-    @peer.on("icecandidate")
-    async def on_icecandidate(candidate):
-        log.info('pc on ice candidate %s %s', sio, candidate)
-        sio.emit("candidate", (sio, candidate), room=broadcaster)
+        # add media tracks
+        if enableTTS:
+            self.peer.addTrack(tts_track())
 
-    @peer.on("track")
-    async def on_track(track):
-        # guard to do this just once... 
-        if (track.kind == 'audio'):
+        @self.peer.on("connectionstatechange")
+        async def on_connectionstatechange():
+            log.info(f"*** peer.connectionState = {self.peer.connectionState}")
+            if self.peer.connectionState == 'closed':
+                await self.sio.disconnect() #close()
+
+        # Log ICE gathering state
+        @self.peer.on("icegatheringstatechange")
+        async def on_ice_gathering_state_change():
+            log.info(f"ICE gathering state changed: {self.peer.iceGatheringState}")
+
+        @self.peer.on("icecandidate")
+        async def on_icecandidate(candidate):
+            log.info('pc on ice candidate %s %s', self.sio, candidate)
+            self.sio.emit("candidate", (self.sio, candidate), room=broadcaster)
+
+        # Note: aiortc leaks if we don't consume the media frames...
+        async def drop_media_data(track):
+                try:
+                    while True:
+                        await track.recv()
+                except:
+                    pass
+
+        @self.peer.on("track")
+        async def on_track(track):
+            # guard to do this just once... 
+            if (track.kind == 'audio'):
+                # pass
+                log.info('Audio track received')
+                asyncio.create_task(handle_audio(track))
+            elif (track.kind == 'video'):
+                # asyncio.create_task(handle_video(track))
+                asyncio.create_task(drop_media_data(track))
+
+                print("******** before creating datachannel")
+                channel = self.peer.createDataChannel('chat')
+
+                @channel.on("open")
+                async def on_open():
+                    print("Data channel is open")
+                    channel.send("ping")
+
+                @channel.on("message")
+                async def on_message(message):
+                    print(f"Received message: {message}")                
+
+            @track.on('ended')
+            async def on_ended():
+                log.info('track ended')
+        #await sio.emit('watch', id)
+
+
+    def callbacks(self):
+        @self.sio.event
+        async def connect():
+            log.info("ws onconnect")
+
+            log.info('Watcher Connected')
+            await self.sio.emit('watcher')
+
+            displayName = 'oai_agent'
+
+            # print('broadcasting:', displayName)
+            await self.sio.emit("broadcaster", {'displayName':displayName});
+            self.connected = True
+
+
+        @self.sio.event
+        async def sendText(t):
+            m = re.search(r'\w*\\([^ ]+) (.*)',t)
+            if m:
+                c = m.group(1)
+                if c == 'say':
+                    await say(m.group(2))
+                else:
+                    log.warning('unknown escaped command:', c)
+            else:
+                await prompt(t)
+
+        @self.sio.event
+        async def captureAudio(f):
+            await setCaptureAudio(f)
             # pass
-            asyncio.create_task(handle_audio(track))
-        elif (track.kind == 'video'):
-            # asyncio.create_task(handle_video(track))
-            asyncio.create_task(drop_media_data(track))
 
-        @track.on('ended')
-        async def on_ended():
-            log.info('track ended')
-    #await sio.emit('watch', id)
+        @self.sio.event
+        async def broadcaster():
+            await self.sio.emit('watcher')
 
-async def onMessage(m):
-    await sio.emit('forwardMessage', (watch_sid,m,))
-    if m['role'] == 'assistant' and m['content']:
-        await say(m['content'][0]['text'])
+        @self.sio.event
+        async def offer(id,message):  # initiating message; id is watching
+            # global watch_sid
 
 
-@sio.event
-async def sendText(t):
-    m = re.search(r'\w*\\([^ ]+) (.*)',t)
-    if m:
-        c = m.group(1)
-        if c == 'say':
-            await say(m.group(2))
-        else:
-            log.warning('unknown escaped command:', c)
-    else:
-        await prompt(t)
+            async def onMessage(m):
+                await self.sio.emit('forwardMessage', (self.watch_sid,m,))
+                if m['role'] == 'assistant' and m['content']:
+                    await say(m['content'][0]['text'])
 
-@sio.event
-async def captureAudio(f):
-    await setCaptureAudio(f)
-    # pass
+            log.info('offer received %s, %s', id, message)
 
-@sio.event
-async def broadcaster():
-    await sio.emit('watcher')
+            self.setupPeer()
+            self.watch_sid = id
+            if enableLLM:
+                setMessageListener(onMessage)
 
-watch_sid = None
+            if self.peer:
+                description = RTCSessionDescription(sdp=message["sdp"], type=message["type"])
+                await self.peer.setRemoteDescription(description)
 
-@sio.event
-async def offer(id,message):  # initiating message; id is watching
-    global watch_sid
-    # log.info('offer received', id, message)
+                # add tracks if we have them
 
-    setupPeer()
-    watch_sid = id
-    if enableLLM:
-        setMessageListener(onMessage)
+                await self.peer.setLocalDescription(await self.peer.createAnswer())
 
-    if peer:
-        description = RTCSessionDescription(sdp=message["sdp"], type=message["type"])
-        await peer.setRemoteDescription(description)
+                local_description = self.peer.localDescription
+                await self.sio.emit("answer", (id,{"sdp": local_description.sdp, "type": local_description.type},))
 
-        # add tracks if we have them
+        @self.sio.event
+        async def candidate(id,message):
+            log.info('candidate received, %s, %s', id, message)
+            if self.peer != None:
+                c = candidate_from_sdp(message["candidate"].split(":", 1)[1])
+                c.sdpMid = message['sdpMid']
+                c.sdpMLineIndex = message['sdpMLineIndex']
+                await self.peer.addIceCandidate(c)
 
-        await peer.setLocalDescription(await peer.createAnswer())
+        @self.sio.event
+        async def disconnectPeer(id):
+            log.info('disconnectPeer')
+            # if self.broadcaster == id and self.peer != None:
+            #     #self.peer.term()
+            #     self.peer = None
+            #     self.broadcaster = None
 
-        local_description = peer.localDescription
-        await sio.emit("answer", (id,{"sdp": local_description.sdp, "type": local_description.type},))
+        @self.sio.event
+        async def disconnect():
+            log.info('Watcher Disconnected')
+            setMessageListener(None)
+            # if self.peer is not None:
+            #     #self.peer.term()
+            #     self.peer = None
 
-@sio.event
-async def candidate(id,message):
-    log.info('candidate received, %s, %s', id, message)
-    if peer != None:
-        c = candidate_from_sdp(message["candidate"].split(":", 1)[1])
-        c.sdpMid = message['sdpMid']
-        c.sdpMLineIndex = message['sdpMLineIndex']
-        await peer.addIceCandidate(c)
 
-@sio.event
-async def disconnectPeer(id):
-    log.info('disconnectPeer')
-    # if self.broadcaster == id and self.peer != None:
-    #     #self.peer.term()
-    #     self.peer = None
-    #     self.broadcaster = None
 
-@sio.event
-async def disconnect():
-    log.info('Watcher Disconnected')
-    setMessageListener(None)
-    # if self.peer is not None:
-    #     #self.peer.term()
-    #     self.peer = None
+# match = '.'
+# broadcaster = None
+# peer = None
 
-# @sio.event
-# async def blahblah():
-#     print('blahblah')
+# connected=False
 
-async def start(signal_server=SIGNAL_SERVER):
-    # print('signal server:', signal_server)
-    log.warn('signal server: %s', signal_server)
-    try:
-        startWhisper()
-        await sio.connect(signal_server, auth={'token':neortc_secret},transports=['websocket'])
-        await sio.wait()
-    # except KeyboardInterrupt:
-    #     print('Exiting OpenAI Agent...')
-    except Exception as e:
-        print('Exception received', e)
+
+
 
 
 # async def start():
@@ -249,7 +268,8 @@ if __name__ == "__main__":
     else:
         log.info('Attempting connection to %s', signal_server)
     try:
-        asyncio.run(start(signal_server))
+        agent = Agent()
+        asyncio.run(agent.start(signal_server))
     except Exception as e:
         print(traceback.format_exc())
         print('Exception2 received', e)

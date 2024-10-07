@@ -5,6 +5,10 @@ import json
 from pathlib import Path
 from collections import ChainMap
 
+import logging
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
 defaults = {
     'neortc_port':8444,
     'neortc_token':'',
@@ -18,7 +22,7 @@ try:
     with open(filename, 'r') as file:
         config_file = json.load(file)
 except FileNotFoundError:
-    print(f"WARNING: Configure neortc by createa file '{filename}'")
+    log.warning(f"WARNING: Configure neortc by creating file '{filename}'")
 
 config = ChainMap(config_file, defaults)
 
