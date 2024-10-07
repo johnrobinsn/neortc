@@ -237,6 +237,16 @@ function neoRTC(url) {
     this.peerConnection.onconnectionstatechange = e => {
       //peerStatus.innerHTML = this.peerConnection.connectionState
       this.onPeerConnectionStateChange?.(this.peerConnection.connectionState)
+
+      if (this.peerConnection.connectionState == 'connected') {
+        var channel = this.peerConnection.createDataChannel("chat")
+        channel.onopen = (e)=>{
+          channel.send("From Data Channel")
+        }
+        channel.onmessage = (e)=>{
+          console.log(e.data)
+        }
+      }
     }
   
     this.peerConnection
@@ -245,6 +255,7 @@ function neoRTC(url) {
       .then(() => {
         this.socket.emit("offer", this.rtcTargetId, this.peerConnection.localDescription);
       });
+
   }
 
 
