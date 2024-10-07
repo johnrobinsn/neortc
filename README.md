@@ -93,3 +93,7 @@ other tools?
 
 #split on silence
 #https://onkar-patil.medium.com/how-to-remove-silence-from-an-audio-using-python-50fd2c00557d
+
+
+wrapping socketio decorator in class
+https://github.com/miguelgrinberg/python-socketio/issues/390
