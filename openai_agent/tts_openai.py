@@ -32,216 +32,209 @@ from av import codec
 from av.packet import Packet
 from aiortc.mediastreams import MediaStreamTrack
 
-# from auth_openai import api_key
 from aconfig import config
-
 openai_api_key = config.get('openai_api_key')
 
-packetq = []
-next_pts = 0
-silence_duration = 0.02
+class TTSTrack:
+    def __init__(self):
+        self.packetq = []
+        self.next_pts = 0
+        self.silence_duration = 0.02
 
-time_base = 48000
-time_base_fraction = Fraction(1, time_base)
+        self.time_base = 48000
+        self.time_base_fraction = Fraction(1, self.time_base)
 
-gcodec = None
-gsample_rate = 0
-gchannels = 0
+        self.gcodec = None
+        self.gsample_rate = 0
+        self.gchannels = 0
+        self.createTTSTrack()
 
-class OggProcessor:
-    pageMagic = struct.unpack('>I', b'OggS')[0]
-    headerMagic = struct.unpack('>Q', b'OpusHead')[0]
-    commentMagic = struct.unpack('>Q', b'OpusTags')[0]
+    class OggProcessor:
+        pageMagic = struct.unpack('>I', b'OggS')[0]
+        headerMagic = struct.unpack('>Q', b'OpusHead')[0]
+        commentMagic = struct.unpack('>Q', b'OpusTags')[0]
 
-    def __init__(self,cb):
-        self.cb = cb
-        self.buffer = b''
-        self.meta = None
+        def __init__(self,cb):
+            self.cb = cb
+            self.buffer = b''
+            self.meta = None
 
-    def onMetaPage(self,page,headerSize):
-        metaFormat = '<8sBBHIhB'
-        metaSize = struct.calcsize(metaFormat)
-        (magic, version, channelCount, preSkip, sampleRate, gain, channelMapping) = struct.unpack_from(metaFormat,page,headerSize)
+        def onMetaPage(self,page,headerSize):
+            metaFormat = '<8sBBHIhB'
+            metaSize = struct.calcsize(metaFormat)
+            (magic, version, channelCount, preSkip, sampleRate, gain, channelMapping) = struct.unpack_from(metaFormat,page,headerSize)
 
-        sampleRate *= 2 # Not sure why we need this... 
-        magic = magic.decode('utf-8')
+            sampleRate *= 2 # Not sure why we need this... 
+            magic = magic.decode('utf-8')
 
-        self.meta = {
-            'magic': magic,
-            'version': version,
-            'channelCount': channelCount,
-            'sampleRate': sampleRate,
-        }
+            self.meta = {
+                'magic': magic,
+                'version': version,
+                'channelCount': channelCount,
+                'sampleRate': sampleRate,
+            }
 
-    def onPage(self,page,headerSize,segmentSizes):
-        if self.cb and self.meta: # need the stream metadata
-            i = headerSize
-            for s in segmentSizes:
-                self.cb(page[i:i+s],self.meta)
-                i = i+s
+        def onPage(self,page,headerSize,segmentSizes):
+            if self.cb and self.meta: # need the stream metadata
+                i = headerSize
+                for s in segmentSizes:
+                    self.cb(page[i:i+s],self.meta)
+                    i = i+s
 
-    # concat buffer and process all available pages
-    # if we don't have enough data bail out and wait for more
-    def addBuffer(self,b):
-        self.buffer = self.buffer + b
-        i = 0
-        while len(self.buffer) >= i+27:  # enough room for a header
-            if self.pageMagic == struct.unpack_from('>I',self.buffer,i)[0]:
-                numSegments = struct.unpack_from('B', self.buffer,i+26)[0]
-                headerSize = 27+numSegments
+        # concat buffer and process all available pages
+        # if we don't have enough data bail out and wait for more
+        def addBuffer(self,b):
+            self.buffer = self.buffer + b
+            i = 0
+            while len(self.buffer) >= i+27:  # enough room for a header
+                if self.pageMagic == struct.unpack_from('>I',self.buffer,i)[0]:
+                    numSegments = struct.unpack_from('B', self.buffer,i+26)[0]
+                    headerSize = 27+numSegments
 
-                if len(self.buffer) < i+headerSize:
-                    return # wait for more data
+                    if len(self.buffer) < i+headerSize:
+                        return # wait for more data
 
-                segmentSizes = struct.unpack_from('B'*numSegments,self.buffer,i+27)
-                segmentTotal = sum(segmentSizes)
-                pageSize = headerSize+segmentTotal
+                    segmentSizes = struct.unpack_from('B'*numSegments,self.buffer,i+27)
+                    segmentTotal = sum(segmentSizes)
+                    pageSize = headerSize+segmentTotal
 
-                if len(self.buffer) < i+pageSize:
-                    return # wait for more data
-                
-                page = self.buffer[i:i+pageSize]
-                if self.headerMagic == struct.unpack_from('>Q',page,headerSize)[0]:
-                    self.onMetaPage(page,headerSize)
-                elif self.commentMagic == struct.unpack_from('>Q',page,headerSize)[0]:
-                    pass # we don't do anything with comment pages
-                else: # Assume audio page
-                    self.onPage(page,headerSize,segmentSizes)
-                i = i+pageSize 
-                self.buffer = self.buffer[i:] # done with this page discarding
-                i = 0
-                continue
-            i = i + 1
+                    if len(self.buffer) < i+pageSize:
+                        return # wait for more data
+                    
+                    page = self.buffer[i:i+pageSize]
+                    if self.headerMagic == struct.unpack_from('>Q',page,headerSize)[0]:
+                        self.onMetaPage(page,headerSize)
+                    elif self.commentMagic == struct.unpack_from('>Q',page,headerSize)[0]:
+                        pass # we don't do anything with comment pages
+                    else: # Assume audio page
+                        self.onPage(page,headerSize,segmentSizes)
+                    i = i+pageSize 
+                    self.buffer = self.buffer[i:] # done with this page discarding
+                    i = 0
+                    continue
+                i = i + 1
 
-def get_silence_packet(duration_seconds):
-    global next_pts
-    chunk = bytes.fromhex('f8 ff fe')
-
-    pkt = Packet(chunk)
-    pkt.pts = next_pts
-    pkt.dts = next_pts
-    pkt.time_base = time_base_fraction
-
-    pts_count = round(duration_seconds * time_base)
-    next_pts += pts_count
-
-    return pkt
-
-# if we we have audio queued deliver that; otherwise silence
-def get_audio_packet():
-    global packetq
-    global next_pts
-    global silence_duration
-    if len(packetq) > 0:
-        try:
-            duration,pts_count,chunk = packetq.pop()
+    def createTTSTrack(self):
+        def get_silence_packet(duration_seconds):
+            chunk = bytes.fromhex('f8 ff fe')
 
             pkt = Packet(chunk)
-            pkt.pts = next_pts
-            pkt.dts = next_pts
-            pkt.time_base = time_base_fraction
+            pkt.pts = self.next_pts
+            pkt.dts = self.next_pts
+            pkt.time_base = self.time_base_fraction
 
-            next_pts += pts_count
+            pts_count = round(duration_seconds * self.time_base)
+            self.next_pts += pts_count
 
-            return pkt,duration
-        except:
-            pass # Ignore Empty exception
+            return pkt
 
-    return get_silence_packet(silence_duration), silence_duration    
+        # if we we have audio queued deliver that; otherwise silence
+        def get_audio_packet():
+            if len(self.packetq) > 0:
+                try:
+                    duration,pts_count,chunk = self.packetq.pop()
 
-class tts_track(MediaStreamTrack):
-    kind = "audio"
-    
-    def __init__(self):
-        super().__init__()
-        self.stream_time = None
-        log.info('create tts_track')
+                    pkt = Packet(chunk)
+                    pkt.pts = self.next_pts
+                    pkt.dts = self.next_pts
+                    pkt.time_base = self.time_base_fraction
 
-    async def close(self):
-        super().stop()
+                    self.next_pts += pts_count
 
-    async def recv(self):
-        try: # exceptions that happen here are eaten... so log them
-            packet, duration = get_audio_packet()
+                    return pkt,duration
+                except:
+                    pass # Ignore Empty exception
 
-            if self.stream_time is None:
-                self.stream_time = time()
+            return get_silence_packet(self.silence_duration), self.silence_duration    
 
-            wait = self.stream_time - time()
-            await sleep(wait)
+        class tts_track(MediaStreamTrack):
+            kind = "audio"
+            
+            def __init__(self):
+                super().__init__()
+                self.stream_time = None
+                log.info('create tts_track')
 
-            self.stream_time += duration
-            return packet
-        except Exception as e:
-            log.error('Exception:', e)
-            raise
+            async def close(self):
+                super().stop()
 
-# invoke OpenAI's TTS API with the provided text(t)
-# and process the returned Opus stream
-async def requestTTS(t, callback):
-    url = 'https://api.openai.com/v1/audio/speech'
+            async def recv(self):
+                try: # exceptions that happen here are eaten... so log them
+                    packet, duration = get_audio_packet()
 
-    headers = {
-        'Authorization': f'Bearer {openai_api_key}',
-        'Content-Type': 'application/json',
-    }
+                    if self.stream_time is None:
+                        self.stream_time = time()
 
-    data = {
-        'model': 'tts-1',
-        'input': t,
-        'voice': 'echo', #'alloy',
-        'response_format': 'opus',
-        'speed': 1.0
-    }
+                    wait = self.stream_time - time()
+                    await sleep(wait)
 
-    async with ClientSession() as session:
-        async with session.post(url=url,json=data,headers=headers,chunked=True) as response:
+                    self.stream_time += duration
+                    return packet
+                except Exception as e:
+                    log.error('Exception:', e)
+                    raise
 
-            def new_path(segment, meta):
-                callback(meta['channelCount'],meta['sampleRate'],segment)
+        self.ttsTrack = tts_track()
 
-            oggProcessor = OggProcessor(new_path)
-            if response.status != 200:
-                log.error('OpenAI TTS Call Failed Status:', response.status)
-            async for data in response.content.iter_chunked(16384):
-                oggProcessor.addBuffer(data)                                   
+    # invoke OpenAI's TTS API with the provided text(t)
+    # and process the returned Opus stream
+    async def requestTTS(self, t, callback):
+        url = 'https://api.openai.com/v1/audio/speech'
 
-def init_codec(channels, sample_rate):
-    global gcodec
-    global gsample_rate
-    global gchannels
+        headers = {
+            'Authorization': f'Bearer {openai_api_key}',
+            'Content-Type': 'application/json',
+        }
 
-    gcodec = codec.CodecContext.create('opus', 'r')
+        data = {
+            'model': 'tts-1',
+            'input': t,
+            'voice': 'echo', #'alloy',
+            'response_format': 'opus',
+            'speed': 1.0
+        }
 
-    gcodec.sample_rate = sample_rate
-    gcodec.channels = channels
+        async with ClientSession() as session:
+            async with session.post(url=url,json=data,headers=headers,chunked=True) as response:
 
-    gsample_rate = sample_rate
-    gchannels = channels
+                def new_path(segment, meta):
+                    callback(meta['channelCount'],meta['sampleRate'],segment)
 
-async def say(t):
-    start = datetime.now()
-    def on_segment(channels, sample_rate, segment):
-        global gcodec
-        global gsample_rate
-        global gchannels
-        global packetq
-        nonlocal start
-        if start:
-            # log.info('time to first segment:', (datetime.now()-start).total_seconds())
-            print('first segment')
-            start = None
+                oggProcessor = TTSTrack.OggProcessor(new_path)
+                if response.status != 200:
+                    log.error('OpenAI TTS Call Failed Status:', response.status)
+                async for data in response.content.iter_chunked(16384):
+                    oggProcessor.addBuffer(data)                                   
 
-        if gsample_rate != sample_rate or gchannels != channels:
-            init_codec(channels, sample_rate)
+    def init_codec(self,channels, sample_rate):
 
-        sample_count = 0
-        for frame in gcodec.decode(Packet(segment)):
-            sample_count += frame.samples
+        self.gcodec = codec.CodecContext.create('opus', 'r')
 
-        duration = sample_count / gsample_rate
+        self.gcodec.sample_rate = sample_rate
+        self.gcodec.channels = channels
 
-        pts_count = round(duration * time_base)
+        self.gsample_rate = sample_rate
+        self.gchannels = channels
 
-        packetq.insert(0,(duration, pts_count, segment))
-    await requestTTS(t,on_segment)
+    async def say(self,t):
+        start = datetime.now()
+        def on_segment(channels, sample_rate, segment):
+            nonlocal start
+            if start:
+                # log.info('time to first segment:', (datetime.now()-start).total_seconds())
+                print('first segment')
+                start = None
+
+            if self.gsample_rate != sample_rate or self.gchannels != channels:
+                self.init_codec(channels, sample_rate)
+
+            sample_count = 0
+            for frame in self.gcodec.decode(Packet(segment)):
+                sample_count += frame.samples
+
+            duration = sample_count / self.gsample_rate
+
+            pts_count = round(duration * self.time_base)
+
+            self.packetq.insert(0,(duration, pts_count, segment))
+        await self.requestTTS(t,on_segment)
