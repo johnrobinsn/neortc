@@ -53,6 +53,9 @@ class Agent:
         self.peer = None
         self.callbacks()
         self.watch_sid = None
+        self.contexts = [
+            'one','two','three'
+        ]
 
     async def start(self,signal_server=SIGNAL_SERVER):
         # print('signal server:', signal_server)
@@ -156,6 +159,11 @@ class Agent:
             await self.sio.emit("broadcaster", {'displayName':displayName});
             self.connected = True
 
+
+        @self.sio.event
+        async def getContexts(id):
+            log.info("agent:getContexts")
+            await self.sio.emit("getContextsResult", id, self.contexts)
 
         @self.sio.event
         async def sendText(t):

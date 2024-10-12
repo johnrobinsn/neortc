@@ -97,3 +97,5 @@ other tools?
 
 wrapping socketio decorator in class
 https://github.com/miguelgrinberg/python-socketio/issues/390
+
+https://stackoverflow.com/questions/38867763/why-i-have-to-open-data-channel-before-send-peer-connection-offer
