@@ -41,43 +41,31 @@ enableSTT = True
 if enableSTT:
     from stt_whisper import handle_audio, setCaptureAudio, startWhisper
 if enableTTS:
-    from tts_openai import tts_track,say
+    from tts_openai import TTSTrack
 if enableLLM:
-    from llm_openai import prompt, setMessageListener, getMessages
+    from llm_openai import prompt, setMessageListener
 
-class Agent:
+class Context:
+    def __init__():
+        pass
+
+def getContext(id):
+    pass
+
+class Peer:
+    peerIndex = 0
     def __init__(self):
-        # self.sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
-        self.sio = AsyncClient(ssl_verify=False)
-        self.connected = False
-        self.peer = None
-        self.callbacks()
-        self.watch_sid = None
-        self.contexts = [
-            'one','two','three'
-        ]
-
-    async def start(self,signal_server=SIGNAL_SERVER):
-        # print('signal server:', signal_server)
-        log.warning('signal server: %s', signal_server)
-        try:
-            startWhisper()
-            await self.sio.connect(signal_server, auth={'token':neortc_secret},transports=['websocket'])
-            await self.sio.wait()
-        # except KeyboardInterrupt:
-        #     print('Exiting OpenAI Agent...')
-        except Exception as e:
-            print('Exception received', e)        
-
-
-    def setupPeer(self):
-
-        self.peer = RTCPeerConnection(configuration=RTCConfiguration([
+        Peer.peerIndex += 1
+        self.peerName = f'peer{Peer.peerIndex}'
+        self.pc = RTCPeerConnection(configuration=RTCConfiguration([
                 RTCIceServer("stun:stun.l.google.com:19302"),
                 #RTCIceServer("turn:turnserver.cidaas.de:3478?transport=udp", "user", "pw"),
                 ]))
+        self.setupPeer()
+
+    def setupPeer(self):
         
-        @self.peer.on("datachannel")
+        @self.pc.on("datachannel")
         async def on_datachannel(channel):
             print('*** channel created')
             @channel.on('message')
@@ -86,24 +74,24 @@ class Agent:
                 if isinstance(message,str) and message=='ping':
                     channel.send("pong")
 
-
-
         # add media tracks
         if enableTTS:
-            self.peer.addTrack(tts_track())
+            self.ttsTrack = TTSTrack()
+            # self.pc.addTrack(tts_track())
+            self.pc.addTrack(self.ttsTrack.ttsTrack)
 
-        @self.peer.on("connectionstatechange")
+        @self.pc.on("connectionstatechange")
         async def on_connectionstatechange():
-            log.info(f"*** peer.connectionState = {self.peer.connectionState}")
-            if self.peer.connectionState == 'closed':
+            log.info(f"*** peer.connectionState = {self.pc.connectionState}")
+            if self.pc.connectionState == 'closed':
                 await self.sio.disconnect() #close()
 
         # Log ICE gathering state
-        @self.peer.on("icegatheringstatechange")
+        @self.pc.on("icegatheringstatechange")
         async def on_ice_gathering_state_change():
-            log.info(f"ICE gathering state changed: {self.peer.iceGatheringState}")
+            log.info(f"ICE gathering state changed: {self.pc.iceGatheringState}")
 
-        @self.peer.on("icecandidate")
+        @self.pc.on("icecandidate")
         async def on_icecandidate(candidate):
             log.info('pc on ice candidate %s %s', self.sio, candidate)
             self.sio.emit("candidate", (self.sio, candidate), room=broadcaster)
@@ -116,7 +104,7 @@ class Agent:
                 except:
                     pass
 
-        @self.peer.on("track")
+        @self.pc.on("track")
         async def on_track(track):
             # guard to do this just once... 
             if (track.kind == 'audio'):
@@ -128,7 +116,7 @@ class Agent:
                 asyncio.create_task(drop_media_data(track))
 
                 print("******** before creating datachannel")
-                channel = self.peer.createDataChannel('chat')
+                channel = self.pc.createDataChannel('chat')
 
                 @channel.on("open")
                 async def on_open():
@@ -144,6 +132,34 @@ class Agent:
                 log.info('track ended')
         #await sio.emit('watch', id)
 
+
+class Agent:
+    def __init__(self):
+        # self.sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
+        self.sio = AsyncClient(ssl_verify=False)
+        self.connected = False
+        # self.peer = None
+        self.callbacks()
+        self.watch_sid = None
+        self.contexts = {
+            'one': {},
+            'two': {},
+            'three': {}
+        }
+        # self.peers = {}
+        self.peer = Peer()
+
+    async def start(self,signal_server=SIGNAL_SERVER):
+        # print('signal server:', signal_server)
+        log.warning('signal server: %s', signal_server)
+        try:
+            startWhisper()
+            await self.sio.connect(signal_server, auth={'token':neortc_secret},transports=['websocket'])
+            await self.sio.wait()
+        # except KeyboardInterrupt:
+        #     print('Exiting OpenAI Agent...')
+        except Exception as e:
+            print('Exception received', e)        
 
     def callbacks(self):
         @self.sio.event
@@ -163,7 +179,7 @@ class Agent:
         @self.sio.event
         async def getContexts(id):
             log.info("agent:getContexts")
-            await self.sio.emit("getContextsResult", id, self.contexts)
+            await self.sio.emit("getContextsResult", (id, list(self.contexts.keys()),))
 
         @self.sio.event
         async def sendText(t):
@@ -171,7 +187,7 @@ class Agent:
             if m:
                 c = m.group(1)
                 if c == 'say':
-                    await say(m.group(2))
+                    await self.peer.ttsTrack.say(m.group(2))
                 else:
                     log.warning('unknown escaped command:', c)
             else:
@@ -194,34 +210,44 @@ class Agent:
             async def onMessage(m):
                 await self.sio.emit('forwardMessage', (self.watch_sid,m,))
                 if m['role'] == 'assistant' and m['content']:
-                    await say(m['content'][0]['text'])
+                    await self.peer.ttsTrack.say(m['content'][0]['text'])
 
             log.info('offer received %s, %s', id, message)
 
-            self.setupPeer()
+            #self.setupPeer()
             self.watch_sid = id
             if enableLLM:
                 setMessageListener(onMessage)
 
+            # if self.peer:
+            #     description = RTCSessionDescription(sdp=message["sdp"], type=message["type"])
+            #     await self.peer.setRemoteDescription(description)
+
+            #     # add tracks if we have them
+
+            #     await self.peer.setLocalDescription(await self.peer.createAnswer())
+
+            #     local_description = self.peer.localDescription
+            #     await self.sio.emit("answer", (id,{"sdp": local_description.sdp, "type": local_description.type},))
             if self.peer:
                 description = RTCSessionDescription(sdp=message["sdp"], type=message["type"])
-                await self.peer.setRemoteDescription(description)
+                await self.peer.pc.setRemoteDescription(description)
 
                 # add tracks if we have them
 
-                await self.peer.setLocalDescription(await self.peer.createAnswer())
+                await self.peer.pc.setLocalDescription(await self.peer.pc.createAnswer())
 
-                local_description = self.peer.localDescription
+                local_description = self.peer.pc.localDescription
                 await self.sio.emit("answer", (id,{"sdp": local_description.sdp, "type": local_description.type},))
 
         @self.sio.event
         async def candidate(id,message):
             log.info('candidate received, %s, %s', id, message)
-            if self.peer != None:
+            if self.peer.pc != None:
                 c = candidate_from_sdp(message["candidate"].split(":", 1)[1])
                 c.sdpMid = message['sdpMid']
                 c.sdpMLineIndex = message['sdpMLineIndex']
-                await self.peer.addIceCandidate(c)
+                await self.peer.pc.addIceCandidate(c)
 
         @self.sio.event
         async def disconnectPeer(id):
