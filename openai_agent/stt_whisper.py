@@ -27,75 +27,92 @@ from samplerate import resample
 
 # from openai_agent.llm_openai import prompt
 # from .. import llm_openai.prompt
-from llm_openai import prompt
+#from llm_openai import prompt
 
-whisper_sample_rate = 16000
 
-capturingAudio=False
-audio = []
-sample_rate = None
-num_channels = None
+class STT:
+    def __init__(self):
+        self.whisper_sample_rate = 16000
 
-async def setCaptureAudio(f):
-    global capturingAudio
-    global audio
-    global sample_rate
-    global num_channels
+        self.capturingAudio=False
+        self.audio = []
+        self.sample_rate = None
+        self.num_channels = None
+        self.llm = None
+        # self.audioHandler = None
 
-    if capturingAudio == f:
-        return
-    capturingAudio = f
-    print('Capturing Audio:', f)
-    # TODO probably set minumum number of frames to something meaningful
-    if not capturingAudio and len(audio) > 0: # on end of capture send to asr
-        buffer = np.concatenate(audio,axis=1)
-        # take the mean across channels to reduce to a single channel
-        buffer = buffer.mean(axis=0)
-        buffer = buffer[::num_channels]
-        buffer.astype(np.int16).tofile('foo48.pcm')
+    async def setCaptureAudio(self,f):
+        # global capturingAudio
+        # global audio
+        # global sample_rate
+        # global num_channels
 
-        ratio = whisper_sample_rate / sample_rate
-        buffer = resample(buffer, ratio, 'sinc_best')
+        if self.capturingAudio == f:
+            return
+        self.capturingAudio = f
+        print('Capturing Audio:', f)
+        # TODO probably set minumum number of frames to something meaningful
+        if not self.capturingAudio and len(self.audio) > 0: # on end of capture send to asr
+            buffer = np.concatenate(self.audio,axis=1)
+            # take the mean across channels to reduce to a single channel
+            buffer = buffer.mean(axis=0)
+            buffer = buffer[::self.num_channels]
+            # buffer.astype(np.int16).tofile('foo48.pcm')
 
-        if False:
-            buffer.astype(np.int16).tofile('foo.pcm')
+            ratio = self.whisper_sample_rate / self.sample_rate
+            buffer = resample(buffer, ratio, 'sinc_best')
 
-            with open('test.pcm', 'wb') as f:
-                f.write(buffer.tobytes())
+            if False:
+                buffer.astype(np.int16).tofile('foo.pcm')
 
-            print('pcm created... ', buffer.shape, buffer.dtype, ' ', sample_rate)
-        
-        
-        float_buffer = buffer.astype(np.float32) / np.iinfo(np.int16).max
+                with open('test.pcm', 'wb') as f:
+                    f.write(buffer.tobytes())
 
-        t = await speech2Text(float_buffer)
-        await prompt(t['text'])
-    audio = []
+                print('pcm created... ', buffer.shape, buffer.dtype, ' ', sample_rate)
+            
+            
+            float_buffer = buffer.astype(np.float32) / np.iinfo(np.int16).max
 
-#dirty
-async def handle_audio(track):
-    global capturingAudio
-    global audio
-    global sample_rate
-    global num_channels
+            t = await self.speech2Text(float_buffer)
+            if self.llm:
+                await self.llm.prompt(t['text'])
+        self.audio = []
+
+    async def speech2Text(self,float_buffer):
+        return await w.send('stt',(float_buffer,))
     
-    # https://stackoverflow.com/questions/31674416/python-realtime-audio-streaming-with-pyaudio-or-something-else
-    isopen = False
+    def setLLM(self,llm):
+        self.llm = llm
 
-    while True:        
-        try:
-            frame = await track.recv()
+    async def handle_audio(self,track):
+        # global capturingAudio
+        # global audio
+        # global sample_rate
+        # global num_channels
+        
+        # https://stackoverflow.com/questions/31674416/python-realtime-audio-streaming-with-pyaudio-or-something-else
+        # isopen = False
 
-            if not capturingAudio:
-                continue # drop frame
+        while True:        
+            try:
+                frame = await track.recv()
 
-            sample_rate = frame.sample_rate
-            num_channels = len(frame.layout.channels)
-            audio.append(frame.to_ndarray())
+                if not self.capturingAudio:
+                    continue # drop frame
 
-        except MediaStreamError:
-            # This exception is raised when the track ends
-            break
+                self.sample_rate = frame.sample_rate
+                self.num_channels = len(frame.layout.channels)
+                self.audio.append(frame.to_ndarray())
+
+            except MediaStreamError:
+                # This exception is raised when the track ends
+                break
+        # self.audioHandler = handle_audio()
+
+        # def getAudioHandler(self):
+        #     if not self.audioHandler:
+        #         self.createAudioHandler()
+        #     return self.audioHandler
 
 
 class Worker:
@@ -140,5 +157,3 @@ def startWhisper():
     global w
     w = Worker()
 
-async def speech2Text(float_buffer):
-    return await w.send('stt',(float_buffer,))
