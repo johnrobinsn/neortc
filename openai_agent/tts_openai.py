@@ -47,9 +47,37 @@ class TTSTrack:
         self.gcodec = None
         self.gsample_rate = 0
         self.gchannels = 0
-        self.createTTSTrack()
+        self._createTTSTrack()
 
-    class OggProcessor:
+    async def say(self,t):
+        start = datetime.now()
+        def on_segment(channels, sample_rate, segment):
+            nonlocal start
+            if start:
+                # log.info('time to first segment:', (datetime.now()-start).total_seconds())
+                print('first segment')
+                start = None
+
+            if self.gsample_rate != sample_rate or self.gchannels != channels:
+                self._init_codec(channels, sample_rate)
+
+            sample_count = 0
+            for frame in self.gcodec.decode(Packet(segment)):
+                sample_count += frame.samples
+
+            duration = sample_count / self.gsample_rate
+
+            pts_count = round(duration * self.time_base)
+
+            self.packetq.insert(0,(duration, pts_count, segment))
+        await self._requestTTS(t,on_segment)
+
+    def getTrack(self):
+        return self.ttsTrack
+    
+    ## -------------- internal impl --------------
+
+    class _OggProcessor:
         pageMagic = struct.unpack('>I', b'OggS')[0]
         headerMagic = struct.unpack('>Q', b'OpusHead')[0]
         commentMagic = struct.unpack('>Q', b'OpusTags')[0]
@@ -114,7 +142,7 @@ class TTSTrack:
                     continue
                 i = i + 1
 
-    def createTTSTrack(self):
+    def _createTTSTrack(self):
         def get_silence_packet(duration_seconds):
             chunk = bytes.fromhex('f8 ff fe')
 
@@ -178,7 +206,7 @@ class TTSTrack:
 
     # invoke OpenAI's TTS API with the provided text(t)
     # and process the returned Opus stream
-    async def requestTTS(self, t, callback):
+    async def _requestTTS(self, t, callback):
         url = 'https://api.openai.com/v1/audio/speech'
 
         headers = {
@@ -200,13 +228,13 @@ class TTSTrack:
                 def new_path(segment, meta):
                     callback(meta['channelCount'],meta['sampleRate'],segment)
 
-                oggProcessor = TTSTrack.OggProcessor(new_path)
+                oggProcessor = TTSTrack._OggProcessor(new_path)
                 if response.status != 200:
                     log.error('OpenAI TTS Call Failed Status:', response.status)
                 async for data in response.content.iter_chunked(16384):
                     oggProcessor.addBuffer(data)                                   
 
-    def init_codec(self,channels, sample_rate):
+    def _init_codec(self,channels, sample_rate):
 
         self.gcodec = codec.CodecContext.create('opus', 'r')
 
@@ -216,25 +244,3 @@ class TTSTrack:
         self.gsample_rate = sample_rate
         self.gchannels = channels
 
-    async def say(self,t):
-        start = datetime.now()
-        def on_segment(channels, sample_rate, segment):
-            nonlocal start
-            if start:
-                # log.info('time to first segment:', (datetime.now()-start).total_seconds())
-                print('first segment')
-                start = None
-
-            if self.gsample_rate != sample_rate or self.gchannels != channels:
-                self.init_codec(channels, sample_rate)
-
-            sample_count = 0
-            for frame in self.gcodec.decode(Packet(segment)):
-                sample_count += frame.samples
-
-            duration = sample_count / self.gsample_rate
-
-            pts_count = round(duration * self.time_base)
-
-            self.packetq.insert(0,(duration, pts_count, segment))
-        await self.requestTTS(t,on_segment)
