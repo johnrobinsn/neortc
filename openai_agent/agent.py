@@ -62,6 +62,7 @@ class Peer:
     def __init__(self, context):
         Peer.peerIndex += 1
         self.peerName = f'peer{Peer.peerIndex}'
+        print('Creating New Peer: ', self.peerName)
         self.pc = RTCPeerConnection(configuration=RTCConfiguration([
                 RTCIceServer("stun:stun.l.google.com:19302"),
                 #RTCIceServer("turn:turnserver.cidaas.de:3478?transport=udp", "user", "pw"),
@@ -74,8 +75,12 @@ class Peer:
         self.dataChannel = None
         async def onMessage(m):
             print("**** Message: ", m)
-            if self.dataChannel:
+            if self.dataChannel and self.dataChannel.readyState == 'open':
+                print("dc readyState:", self.dataChannel.readyState)
                 self.dataChannel.send(json.dumps(m))
+            else:
+                print(f"datachannel closed {self.peerName}")
+                return # bail out
             if self.ttsTrack and m['role'] == 'assistant' and m['content']:
                 await self.ttsTrack.say(m['content'][0]['text'])                
         context.addListener(onMessage)
@@ -85,13 +90,20 @@ class Peer:
         @self.pc.on("datachannel")
         async def on_datachannel(channel):
             self.dataChannel = channel
-            print('*** channel created')
+            print('*** channel created',channel.readyState)
+            @channel.on('open')
+            async def on_open():
+                print("dc is open: ", channel.readyState)
             @channel.on('message')
             async def on_message(message):
                 print(f'Received Message: {message}')
+                print(f'channel state: {channel.readyState}')
                 await self.context.prompt(message)
                 # if isinstance(message,str) and message=='ping':
                 #     channel.send("pong")
+            @channel.on('close')
+            async def on_close():
+                print(f'channel closed: {channel.readyState}')
 
         # add media tracks
         if enableTTS:
@@ -102,8 +114,8 @@ class Peer:
         @self.pc.on("connectionstatechange")
         async def on_connectionstatechange():
             log.info(f"*** peer.connectionState = {self.pc.connectionState}")
-            if self.pc.connectionState == 'closed':
-                await self.sio.disconnect() #close()
+            # if self.pc.connectionState == 'closed':
+            #     await self.sio.disconnect() #close()
 
         # Log ICE gathering state
         @self.pc.on("icegatheringstatechange")
@@ -174,6 +186,7 @@ class Agent:
         self.peers= {}
 
     def getPeer(self,sid):
+        print('Getting Peer for Client: ', sid)
         if sid in self.peers:
             return self.peers[sid]
         else:
