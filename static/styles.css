@@ -136,5 +136,7 @@ button {
 
 .user {color:aquamarine;}
 .assistant {color: lightblue;}
+.tool {color: yellow;}
+.system {color: red;}
 
 pre { white-space: pre-wrap; }
