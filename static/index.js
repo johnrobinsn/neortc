@@ -390,6 +390,7 @@ window.onload = ()=>{
   rtc.connect(window.location.origin)
   rtc.rtcConnect()
   window.rtc = rtc
+  sendTxt.focus()
 }
 
 // what about keep alive... 
