@@ -53,7 +53,7 @@ async def forwardMessage(sid,target_sid,m):
 
 @sio.event
 async def sendText(sid,target_sid,t):
-    await sio.emit('sendText', (t,), room=target_sid)
+    await sio.emit('sendText', (sid,t,), room=target_sid)
 
 @sio.event
 async def error(e):
@@ -62,7 +62,7 @@ async def error(e):
 @sio.event
 async def captureAudio(sid,target_sid,f):
     print('server.py captureAudio')
-    await sio.emit('captureAudio', (f,), room=target_sid)
+    await sio.emit('captureAudio', (sid,f,), room=target_sid)
 
 @sio.event
 async def connect(sid,env,auth):
@@ -74,6 +74,17 @@ async def connect(sid,env,auth):
     else:
         await sio.emit('peersChanged', (peers,))
 
+# forward to agent
+@sio.event
+async def getContexts(sid,target_sid):
+    log.info("Forwarding getContexts")
+    await sio.emit('getContexts',sid,room=target_sid)
+
+# forward reply back to client
+@sio.event
+async def getContextsResult(sid,target_sid,contexts):
+    log.info("forwarding reply getContextsResult %s", target_sid)
+    await sio.emit('getContextsResult',(sid,contexts,),room=target_sid if target_sid is not '' else None)
 
 @sio.event
 async def broadcaster(sid,info):
@@ -93,8 +104,8 @@ async def watch(sid, target_sid):
     await sio.emit('watcher', (sid,), room=target_sid)
 
 @sio.event
-async def offer(sid, target_sid, message):
-    await sio.emit('offer', (sid, message), room=target_sid)
+async def offer(sid, target_sid, message, context):
+    await sio.emit('offer', (sid, message, context), room=target_sid)
 
 @sio.event
 async def answer(sid, target_sid, message):
@@ -165,7 +176,6 @@ async def on_shutdown(app):
 app.on_shutdown.append(on_shutdown)
 
 default_host='*'
-# default_port=8443
 default_port = config.get('neortc_port')
 
 ssl_context = SSLContext(PROTOCOL_TLS_SERVER)

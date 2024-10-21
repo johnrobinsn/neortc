@@ -32,9 +32,8 @@ const config = {
 };
 
 const urlParams = new URLSearchParams(window.location.search);
-// console.log('url:', window.location.origin+'?token='+encodeURIComponent(urlParams.get('token')))
 const peers = document.querySelector("#peers")
-const talkBtn = document.querySelector("#talk-button")
+const contextsDiv = document.querySelector("#contexts")
 const remoteAudio = document.querySelector('#remote-audio')
 const chatLog = document.querySelector("#chat-log")
 const sendTxt = document.querySelector('#sendTxt')
@@ -42,10 +41,9 @@ const sendBtn = document.querySelector('#sendBtn')
 const sockStatus = document.querySelector("#sockStatus")
 const peerStatus = document.querySelector('#peerStatus')
 
-
-//const socket = io.connect(window.location.origin+'?token='+encodeURIComponent(urlParams.get('token')))
-
-//socket = io.connect(window.location.origin)
+function setContext(contextStr) {
+  window.rtc?.setContext(contextStr)
+}
 
 function neoRTC(url) {
   this.url = url
@@ -71,20 +69,30 @@ function neoRTC(url) {
   this._onAnswer = null
   this._onIceCandidate = null
 
+  this._remoteDescriptionSet = false
+  this._cachedIceCandidates = []
+
   this.rtcDisconnect = ()=>{
     if (this.peerConnection) {
       this.peerConnection.close()
       this.peerConnection = null
       this.rtcTargetId = null
+      this.channel = null
     }
   }
 
   this.rtcConnect = (targetId,video,audio)=>{
     this.mediaPromise.then((targetId,video,audio)=>{this._rtcConnect(targetId,video,audio)})
   }
+  
+  this.setContext = (t)=>{
+    if (this.channel)
+      this.channel.send(JSON.stringify({'t':'setContext','p':t}))
+  }
 
   this.sendText = (t)=>{
-    this.socket.emit('sendText', this.rtcTargetId, t)
+    if (this.channel)
+      this.channel.send(JSON.stringify({'t':'sendText','p':t}))
   }
 
   this.connect = (url)=>{
@@ -96,6 +104,17 @@ function neoRTC(url) {
     // can I renegotiate media
     this.socket = io.connect(url,{auth: {token: urlParams.get('token')}})
 
+    this.socket.on("getContextsResult", (id, contexts)=>{
+      console.log('getContextsResult:', contexts);
+      h = '<ul>'
+      h += `<li><a href="." onclick="javascript:setContext('');return false;">New</a></li>`
+      for(c of contexts) {
+        h += `<li><a href="." onclick="javascript:setContext('${c.id}');return false;">${c.id}</a></li>`
+      }
+      h += '</ul>'
+      contextsDiv.innerHTML = h
+    })
+
     this.socket.on("peersChanged", (peers)=>{
       this.peers = peers
       console.log('peers received:', peers)
@@ -103,58 +122,44 @@ function neoRTC(url) {
     })
   
     this.socket.on("answer", (id, description) => {
-      //peerConnections[id].setRemoteDescription(description);
+      console.log('answer received setting remote descripiton', description)
+      if (this._remoteDescriptionSet) {
+        console.log('remoteDescription already set!!')
+        return
+      }
       if (this.peerConnection) {
         this.peerConnection.setRemoteDescription(description);
+        this._remoteDescriptionSet = true
+        for(let i=0; i < this._cachedIceCandidates.length; i++) {
+          this.peerConnection.addIceCandidate(new RTCIceCandidate(this._cachedIceCandidates[i]))
+          console.log('adding cached candidate')
+        }
+        this._cachedIceCandidates = []
+
         this._onAnswer?.(id, description)
       }
     })
 
     this.socket.on("candidate", (id, candidate) => {
       console.log('candidate:', candidate)
-      //peerConnections[id].addIceCandidate(new RTCIceCandidate(canwindow.location.origindate));
-      this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      if (this._remoteDescriptionSet)
+        this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      else
+        this._cachedIceCandidates.push(candidate)
     });
-
-	  // internal housekeeping... 
-    // this.socket.on("disconnectPeer", id => {
-    //   console.log('disconnectPeer', id)
-    //   this.peerConnection.close();
-    //   this.onDisconnectPeer?.(this.socket.id)
-    //   //peerConnections[id].close();
-    //   //delete peerConnections[id];
-    // });
     
     this.socket.on("connect",()=>{
       this.socket.emit("watcher");
       this.connectStatus = true
       this.onConnectStatusChanged?.(this.connectStatus)
-      //window.rtc.rtcConnect()
     });
     
     this.socket.on("disconnect",()=>{
-      //sockStatus.innerHTML = 'disconnected'
-      //this.onDisconnect?.()
       this.connectStatus = false
       this.onConnectStatusChanged?.(this.connectStatus)
       this.disconnect() 
     })
 
-    // check to see if socket is already disconnected prior to registering
-    // ondisconnect handler
-    // console.log('socket status:', this.socket)
-    // if (this.socket.disconnected) {
-    //   this.connectStatus = false
-    //   this.onConnectStatusChanged?.(this.connectStatus)
-    //   this.disconnect() 
-    // }
-
-    this.socket.on("onMessage", (id, m)=>{
-      console.log('client:', m)
-  
-      h = `<div class="${m.role}"><pre><b>${m.role}:</b> ${m.content[0].text}</pre></div>`
-      chatLog.innerHTML = chatLog.innerHTML + h
-    })    
   }
 
   this.disconnect = ()=>{
@@ -166,13 +171,15 @@ function neoRTC(url) {
   }
 
   this._rtcConnect = (targetId,video,audio) => {
+
+    this.socket.emit("getContexts", this.rtcTargetId)
+
     this.rtcDisconnect()
 
     this.rtcTargetId = targetId
   
     console.log("in watch handler")
     this.peerConnection = new RTCPeerConnection(config);
-    //peerConnections[id] = peerConnection;
   
     // adding local tracks camera
     if (videoElement) {
@@ -184,47 +191,12 @@ function neoRTC(url) {
     }
   
     console.log('registering ontrack handler')  
-    //peerConnections[id].ontrack = e=>{
       this.peerConnection.ontrack = e=>{
-      //console.log("on track received trying to loop back", e)
-  //    remoteVideo.srcObject = e.streams[0]
-      //peerConnection.addTrack(e.streams[0])
-    //   if (e.streams.length > 0) {
-    //   let stream = new MediaStream()//e.streams[0];//videoElement.srcObject;
-    //   e.streams[0].getTracks().forEach(track =>{
-    //     // todo right now really doing local video... should I switch to remote video
-    //     // issue is I can't figure out how to reflect video when the receiver is javascript rather
-    //     // than python
-    //     if (track.kind=="video") {
-    //       //peerConnection.addTrack(track, stream)
-    //       //console.log('adding remote tracks', track, stream)
-    //     }
-    //     else if (track.kind=="audio") {
-    //       remoteAudio.srcObject = e.streams[0]
-    //     }
-    //   });    
-    // }
-    // else console.log('no streams in track')
   
       if (e.track.kind=="audio") {
         console.log('audio stream received')
-        remoteAudio.srcObject = e.streams[0]
-        // remoteAudio.setAttribute('playsinline', true)
-        // remoteAudio.play()
-
-        // const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        // const source = audioContext.createMediaStreamSource(e.streams[0]);
-        // const destination = audioContext.createMediaStreamDestination();
-        // source.connect(destination);        
-
+        remoteAudio.srcObject = e.streams[0]     
       }
-      // else if (e.track.kind=="video") {
-      //   remoteVideo.srcObject = e.streams[0]
-      // }
-      // if (e.candidate) {
-      //   this.socket.emit("candidate", this.rtcTargetId, e.candidate);
-      // }
-      // this.onIceCandidate?.(e)
     };
 
     this.peerConnection.onicecandidate = e=>{
@@ -235,25 +207,51 @@ function neoRTC(url) {
     }
   
     this.peerConnection.onconnectionstatechange = e => {
-      //peerStatus.innerHTML = this.peerConnection.connectionState
       this.onPeerConnectionStateChange?.(this.peerConnection.connectionState)
-
-      if (this.peerConnection.connectionState == 'connected') {
-        var channel = this.peerConnection.createDataChannel("chat")
-        channel.onopen = (e)=>{
-          channel.send("From Data Channel")
-        }
-        channel.onmessage = (e)=>{
-          console.log(e.data)
-        }
-      }
     }
   
+      try {
+      this.channel = this.peerConnection.createDataChannel("chat")
+      this.channel.onopen = (e)=>{
+      }
+
+      function appendLog(m) {
+        console.log(m)
+        h = `<div class="${m.role}"><pre><b>${m.role}:</b> ${m.content[0].text}</pre></div>`
+        chatLog.innerHTML = chatLog.innerHTML + h
+      }
+      function replaceLog(m) {
+        console.log(m)
+        chatLog.innerHTML = ''
+        for (h of m) {
+          appendLog(h)
+        }
+      }
+      this.channel.onmessage = (e)=>{
+        console.log(e.data)
+        let m = JSON.parse(e.data)
+
+        console.log('from datachannel client:', m)
+  
+        if (m.t == 'replaceLog') replaceLog(m.p)
+        else if (m.t = 'appendLog') appendLog(m.p)
+        else console.log('unhandled datachannel message')
+
+      }
+      this.channel.onclose = (e)=>{
+        console.log('data channel closed')
+      }
+    }
+    catch(e) {
+      console.log('data connection exception:', e)
+
+    }
+
     this.peerConnection
     .createOffer()//({offerToReceiveAudio: true,offerToReceiveVideo: false})//.createOffer()
       .then(sdp => this.peerConnection.setLocalDescription(sdp))
       .then(() => {
-        this.socket.emit("offer", this.rtcTargetId, this.peerConnection.localDescription);
+        this.socket.emit("offer", this.rtcTargetId, this.peerConnection.localDescription, "");
       });
 
   }
@@ -264,14 +262,9 @@ function neoRTC(url) {
 
 function sendPrompt() {
     window.rtc.sendText(sendTxt.value)
-    chatLog.innerHTML = chatLog.innerHTML + sendTxt.value
     sendTxt.value = ''
     sendBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>'
 }
-
-// sendBtn.addEventListener('click',(e)=>{
-//   sendPrompt()
-// })
 
 sendTxt.addEventListener("keydown",(e)=>{
   if(e.keyCode == 13 && !e.shiftKey) {
@@ -309,143 +302,6 @@ sendBtn.addEventListener('pointerup',(e)=>{
     listen(false)
   else sendPrompt()
 })
-
-// function watch(id) {
-//   watching = id
-//   watchingdiv.innerHTML = `watching: ${bcasters[id].displayName}`
-//   socket.emit("watch",id);
-// }
-
-// socket.on("peersChanged", (b)=>{
-
-//   bcasters = b
-//   console.log('peers received')
-//   peers.innerHTML = ''
-//   let found = false
-//   for (var k in b) {
-//     peers.insertAdjacentHTML('beforeend',`<a href="" onclick="watch('${k}');return false">${b[k].displayName}</a><br>`)
-//     if (watching == k)
-//       found = true
-//   }
-//   // if (!found) {
-//   //   let k = Object.keys(b)
-//   //   if (k.length > 0)
-//   //     setTimeout(()=>watch(k[0]),0)
-//   // }
-// });
-
-// // socket.on("answer", (id, description) => {
-// //   //peerConnections[id].setRemoteDescription(description);
-// //   peerConnection.setRemoteDescription(description);
-
-// // });
-
-// //socket.on("watcher", id => {
-// function watch(id) {
-//   target = id
-
-//   console.log("in watch handler")
-//   peerConnection = new RTCPeerConnection(config);
-//   //peerConnections[id] = peerConnection;
-
-//   // adding local tracks camera
-//   if (videoElement) {
-//   let stream = videoElement.srcObject;
-//   stream.getTracks().forEach(track => {
-//     peerConnection.addTrack(track, stream)
-//     console.log('adding local tracks:', track, stream)
-//   });
-//   }
-
-//   console.log('registering ontrack handler')  
-//   //peerConnections[id].ontrack = e=>{
-//     peerConnection.ontrack = e=>{
-//     //console.log("on track received trying to loop back", e)
-// //    remoteVideo.srcObject = e.streams[0]
-//     //peerConnection.addTrack(e.streams[0])
-//   //   if (e.streams.length > 0) {
-//   //   let stream = new MediaStream()//e.streams[0];//videoElement.srcObject;
-//   //   e.streams[0].getTracks().forEach(track =>{
-//   //     // todo right now really doing local video... should I switch to remote video
-//   //     // issue is I can't figure out how to reflect video when the receiver is javascript rather
-//   //     // than python
-//   //     if (track.kind=="video") {
-//   //       //peerConnection.addTrack(track, stream)
-//   //       //console.log('adding remote tracks', track, stream)
-//   //     }
-//   //     else if (track.kind=="audio") {
-//   //       remoteAudio.srcObject = e.streams[0]
-//   //     }
-//   //   });    
-//   // }
-//   // else console.log('no streams in track')
-
-//     if (e.track.kind=="audio") {
-//       console.log('audio stream received')
-//       remoteAudio.srcObject = e.streams[0]
-//     }
-//     // else if (e.track.kind=="video") {
-//     //   remoteVideo.srcObject = e.streams[0]
-//     // }
-
-//   }  
-
-//   peerConnection.onicecandidate = event => {
-//     if (event.candidate) {
-//       socket.emit("candidate", id, event.candidate);
-//     }
-//   };
-
-//   peerConnection.onconnectionstatechange = e => {
-//     peerStatus.innerHTML = peerConnection.connectionState
-//   }
-
-//   peerConnection
-//   .createOffer()//.createOffer({offerToReceiveAudio: true,offerToReceiveVideo: true})
-//     .then(sdp => peerConnection.setLocalDescription(sdp))
-//     .then(() => {
-//       socket.emit("offer", id, peerConnection.localDescription);
-//     });
-// }
-// //});
-
-// socket.on("onMessage", (id, m)=>{
-//   console.log('client:', m)
-
-//   h = `<div class="${m.role}"><b>${m.role}: </b> ${m.content[0].text}</div>`
-//   chatLog.innerHTML = chatLog.innerHTML + h
-// })
-
-// socket.on("candidate", (id, candidate) => {
-//   console.log('candidate:', candidate)
-//   //peerConnections[id].addIceCandidate(new RTCIceCandidate(canwindow.location.origindate));
-//   peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-// });
-
-// socket.on("disconnectPeer", id => {
-//   console.log('disconnectPeer', id)
-//   peerConnection.close();
-//   //peerConnections[id].close();
-//   //delete peerConnections[id];
-// });
-
-// socket.on("connect", () => {
-//   sockStatus.innerHTML = 'connected'
-//   socket.emit("watcher");
-
-//   // let displayName = urlParams.get('name')?urlParams.get('name'):socket.id
-//   // socket.emit("broadcaster", {'displayName':displayName});  
-// });
-
-
-// socket.on("disconnect", ()=> {
-//   sockStatus.innerHTML = 'disconnected'
-// })
-
-// window.onunload = window.onbeforeunload = () => {
-//   socket.close();
-// };
-
 
 // Handle HTML integration
 
@@ -514,8 +370,7 @@ function gotStream(stream) {
   );
   videoElement.srcObject = stream;
   console.log('urlParams:', urlParams)
-  //let displayName = urlParams.get('name')?urlParams.get('name'):socket.id
-  //socket.emit("broadcaster", {'displayName':displayName});
+
   window.rtc.resolveMedia()
 }
 
@@ -544,6 +399,4 @@ window.onunload = window.onbeforeunload = ()=>{
   if (window.rtc)
     rtc.disconnect()
 };
-// socket.on("connect", ()=> {
 
-// })
