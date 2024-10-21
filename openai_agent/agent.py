@@ -217,6 +217,7 @@ class Agent:
             # Peer init will add peer to agent::peers
             p = Peer(c,sid)
             #self.peers[sid] = p
+            p.setContext(c)
             return p
         
     def getPeer(self,sid):
