@@ -5,13 +5,19 @@
 - [X] get context history
 - [X] Client can select a context
 - [X] button for new context
+- [ ] setAudioCapture over peer connection
 - [ ] context name and date send via events
 - [ ] context meta data over data channel
     * name, id, date created
-- [ ] clean up cruft
-- [ ] commit to repo
-- [ ] No context… New context…
+- [ ] show selected context in UI
+- [ ] smoke test on phone
+- [X] No context… New context…
 - [ ] different clients with different contexts/peer connections
+- [ ] persistence chat contexts
+- [ ] persistence of tts text and audio files for dataset
+- [ ] persistence of stt audio and text for dataset
+- [ ] Use summarization to generate chat display name
+- [ ] Create timestamp (best practices for webservices)
 
 ## My Agent
 - [ ] Todo List is a note type
