@@ -38,22 +38,22 @@ peers = {}
 
 sio = AsyncServer(cors_allowed_origins='*')
 
-async def periodic():
-    while True:
-        peerkeys = list(peers.keys())
-        print(len(peerkeys))
-        peer = '' if len(peerkeys) < 1 else peerkeys[0]
-        print('periodic',peers,peer)
-        await sio.emit('blahblah', room=peer)
-        await asyncio.sleep(1)
+# async def periodic():
+#     while True:
+#         peerkeys = list(peers.keys())
+#         print(len(peerkeys))
+#         peer = '' if len(peerkeys) < 1 else peerkeys[0]
+#         print('periodic',peers,peer)
+#         await sio.emit('blahblah', room=peer)
+#         await asyncio.sleep(1)
 
-@sio.event
-async def forwardMessage(sid,target_sid,m):
-    await sio.emit('onMessage', (sid,m,), room=target_sid)
+# @sio.event
+# async def forwardMessage(sid,target_sid,m):
+#     await sio.emit('onMessage', (sid,m,), room=target_sid)
 
-@sio.event
-async def sendText(sid,target_sid,t):
-    await sio.emit('sendText', (sid,t,), room=target_sid)
+# @sio.event
+# async def sendText(sid,target_sid,t):
+#     await sio.emit('sendText', (sid,t,), room=target_sid)
 
 @sio.event
 async def error(e):
@@ -141,30 +141,30 @@ sio.attach(app)
 app.add_routes(routes)
 
 
-async def start_background_tasks2(app):
-    print("starting tasks")
-    app['tasks'] = []
-    app['tasks'].append(create_task(periodic()))
+# async def start_background_tasks2(app):
+#     print("starting tasks")
+#     app['tasks'] = []
+#     app['tasks'].append(create_task(periodic()))
 
-async def start_background_tasks(app):
-    print("starting tasks")
-    app['tasks'] = []
-    app['tasks'].append(create_task(start_oai()))
+# async def start_background_tasks(app):
+#     print("starting tasks")
+#     app['tasks'] = []
+#     app['tasks'].append(create_task(start_oai()))
 
-async def cleanup_background_tasks(app):
-    print("cleaning up tasks")
-    for t in app['tasks']:
-        log.info('shutting down openai')
-        t.cancel()
-        await t
-    log.info('done shutting down tasks')
+# async def cleanup_background_tasks(app):
+#     print("cleaning up tasks")
+#     for t in app['tasks']:
+#         log.info('shutting down openai')
+#         t.cancel()
+#         await t
+#     log.info('done shutting down tasks')
 
-if False:
-    app.on_startup.append(start_background_tasks)
-    app.on_cleanup.append(cleanup_background_tasks)
-else:
-    # app.on_startup.append(start_background_tasks2)
-    pass
+# if False:
+#     app.on_startup.append(start_background_tasks)
+#     app.on_cleanup.append(cleanup_background_tasks)
+# else:
+#     # app.on_startup.append(start_background_tasks2)
+#     pass
 
 
 
