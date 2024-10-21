@@ -38,7 +38,6 @@ enableTTS = True
 enableLLM = True
 enableSTT = True
 
-
 # for each peer
 if enableSTT:
     from stt_whisper import startWhisper, STT
@@ -49,41 +48,56 @@ if enableTTS:
 if enableLLM:
     from llm_openai import LLM
 
-llm = LLM()
-
-# llm as context
-# prompt - input
-# setMessageListener - output
-# gethistory - tbd
-# get metadata - id, name, datecreated, sharing, model 
 import json
 class Peer:
     peerIndex = 0
-    def __init__(self, context):
+    def __init__(self, context, key):
         Peer.peerIndex += 1
         self.peerName = f'peer{Peer.peerIndex}'
+        self.key = key
         print('Creating New Peer: ', self.peerName)
         self.pc = RTCPeerConnection(configuration=RTCConfiguration([
                 RTCIceServer("stun:stun.l.google.com:19302"),
                 #RTCIceServer("turn:turnserver.cidaas.de:3478?transport=udp", "user", "pw"),
                 ]))
         self.setupPeer()
-        self.context = context
+        self.context = None
         
         self.stt = STT() # could probably defer this until really needed
-        self.stt.setLLM(self.context)
         self.dataChannel = None
+ 
+        # context modified update connected peers
         async def onMessage(m):
-            print("**** Message: ", m)
+            # print("**** Message: ", m)
             if self.dataChannel and self.dataChannel.readyState == 'open':
-                print("dc readyState:", self.dataChannel.readyState)
-                self.dataChannel.send(json.dumps(m))
+                msg = {'t':'appendLog','p':m}
+                self.dataChannel.send(json.dumps(msg))
             else:
-                print(f"datachannel closed {self.peerName}")
+                log.error(f"datachannel closed {self.peerName}")
                 return # bail out
             if self.ttsTrack and m['role'] == 'assistant' and m['content']:
-                await self.ttsTrack.say(m['content'][0]['text'])                
-        context.addListener(onMessage)
+                await self.ttsTrack.say(m['content'][0]['text'])  
+
+        self.listener = onMessage              
+        agent.peers[self.key] = self
+
+    def __del__(self):
+        log.info(f'Peer finalized: {self.key}')
+
+    def setContext(self,context):
+        print('setting context on peer', context)
+        if self.context:
+            self.context.delListener(self.listener)
+            self.stt.setLLM(None)
+            self.context = None
+        if context:
+            self.context = context
+            self.stt.setLLM(self.context)
+            context.addListener(self.listener)
+            # send log to peer
+            if self.dataChannel and self.dataChannel.readyState == 'open':
+                msg = {'t':'replaceLog','p':self.context.prompt_messages}
+                self.dataChannel.send(json.dumps(msg))
 
     def setupPeer(self):
         
@@ -91,16 +105,25 @@ class Peer:
         async def on_datachannel(channel):
             self.dataChannel = channel
             print('*** channel created',channel.readyState)
+            if self.context:
+                msg = {'t':'replaceLog','p':self.context.prompt_messages}
+                self.dataChannel.send(json.dumps(msg))
             @channel.on('open')
             async def on_open():
                 print("dc is open: ", channel.readyState)
+
             @channel.on('message')
             async def on_message(message):
-                print(f'Received Message: {message}')
+                print(f'Received Message: ', message)
                 print(f'channel state: {channel.readyState}')
-                await self.context.prompt(message)
-                # if isinstance(message,str) and message=='ping':
-                #     channel.send("pong")
+
+                o = json.loads(message)
+                print('onMessage:', o)
+                if o['t'] == 'sendText':
+                    await self.context.prompt(o['p'])                    
+                elif o['t'] == 'setContext':
+                    self.setContext(await agent.getContext(o['p']))                
+
             @channel.on('close')
             async def on_close():
                 print(f'channel closed: {channel.readyState}')
@@ -108,14 +131,18 @@ class Peer:
         # add media tracks
         if enableTTS:
             self.ttsTrack = TTSTrack()
-            # self.pc.addTrack(tts_track())
             self.pc.addTrack(self.ttsTrack.getTrack())
 
         @self.pc.on("connectionstatechange")
         async def on_connectionstatechange():
             log.info(f"*** peer.connectionState = {self.pc.connectionState}")
-            # if self.pc.connectionState == 'closed':
-            #     await self.sio.disconnect() #close()
+            state = self.pc.connectionState
+
+            if state == 'closed' or state == 'failed':
+                self.setContext(None)
+                del agent.peers[self.key]
+                print('removing peer from agent', self.key)
+                print('Total Peers: ', len(agent.peers))
 
         # Log ICE gathering state
         @self.pc.on("icegatheringstatechange")
@@ -144,55 +171,59 @@ class Peer:
                 asyncio.create_task(self.stt.handle_audio(track))
             elif (track.kind == 'video'):
                 # asyncio.create_task(handle_video(track))
-                asyncio.create_task(drop_media_data(track))
-
-                # print("******** before creating datachannel")
-                # channel = self.pc.createDataChannel('chat')
-
-                # @channel.on("open")
-                # async def on_open():
-                #     print("Data channel is open")
-                #     channel.send("ping")
-
-                # @channel.on("message")
-                # async def on_message(message):
-                #     global llm
-                #     print(f"Received message: {message}") 
-                #     await llm.prompt(message)   
-                #     print('after prompt')     
-                           
+                asyncio.create_task(drop_media_data(track))                        
 
             @track.on('ended')
             async def on_ended():
                 log.info('track ended')
-        #await sio.emit('watch', id)
 
 class Agent:
+
+    nextContextId=0
+
     def __init__(self):
         # self.sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
         self.sio = AsyncClient(ssl_verify=False)
         self.connected = False
-        # self.peer = None
+
         self.callbacks()
         self.watch_sid = None
-        self.contexts = {
-            'one': {},
-            'two': {},
-            'three': {}
-        }
-        # self.peers = {}
-        # self.peer = Peer(llm):
-        self.listener = None
-        self.peers= {}
 
-    def getPeer(self,sid):
+        self.listener = None
+
+        self.contexts = {}
+        self.peers = {}
+
+    async def getContext(self, cid):
+        print('Getting context: ', cid)
+        if cid in self.contexts:
+            return self.contexts[cid]
+        else:
+            if not cid:
+                # create a context Str
+                cid = f'context{Agent.nextContextId}'
+                Agent.nextContextId += 1            
+            l = LLM(cid)
+            self.contexts[cid] = l
+            await self.updateContexts() # broadcast
+            return l
+
+    async def createPeer(self,sid,contextStr = ''):
         print('Getting Peer for Client: ', sid)
         if sid in self.peers:
             return self.peers[sid]
         else:
-            p = Peer(llm)
-            self.peers[sid] = p
+            c = await self.getContext(contextStr)
+            # Peer init will add peer to agent::peers
+            p = Peer(c,sid)
+            #self.peers[sid] = p
             return p
+        
+    def getPeer(self,sid):
+        if (sid in self.peers):
+            return self.peers[sid]
+        else:
+            print("ERROR: Unknown peer!")
 
     async def start(self,signal_server=SIGNAL_SERVER):
         # print('signal server:', signal_server)
@@ -204,7 +235,15 @@ class Agent:
         # except KeyboardInterrupt:
         #     print('Exiting OpenAI Agent...')
         except Exception as e:
-            print('Exception received', e)        
+            print('Exception received', e)      
+
+    async def updateContexts(self,id=''):
+        metaData = [v.getMetaData() for i,(k,v) in enumerate(self.contexts.items())]
+        # metaData = []
+        log.info("Updating contexts: %s", metaData)
+        log.info("contexts: %s", self.contexts)
+        # await self.sio.emit("getContextsResult", (id, list(self.contexts.keys()),))      
+        await self.sio.emit("getContextsResult", (id, metaData,))    
 
     def callbacks(self):
         @self.sio.event
@@ -220,11 +259,10 @@ class Agent:
             await self.sio.emit("broadcaster", {'displayName':displayName});
             self.connected = True
 
-
         @self.sio.event
         async def getContexts(id):
             log.info("agent:getContexts")
-            await self.sio.emit("getContextsResult", (id, list(self.contexts.keys()),))
+            await self.updateContexts(id=id)
 
         # @self.sio.event
         # async def sendText(sid,t):
@@ -244,42 +282,21 @@ class Agent:
         async def captureAudio(sid,f):
             peer = self.getPeer(sid)
             await peer.stt.setCaptureAudio(f)
-            # pass
 
         @self.sio.event
         async def broadcaster():
             await self.sio.emit('watcher')
 
         @self.sio.event
-        async def offer(id,message):  # initiating message; id is watching
+        async def offer(id,message,contextStr):  # initiating message; id is watching
             # global watch_sid
-            peer = self.getPeer(id)
+            print("**** requested context: ", contextStr)
+            peer = await self.createPeer(id,contextStr)
             print("id:", id, " peer: ", peer)
-
-            # async def onMessage(m):
-            #     await self.sio.emit('forwardMessage', (self.watch_sid,m,))
-            #     if m['role'] == 'assistant' and m['content']:
-            #         await peer.ttsTrack.say(m['content'][0]['text'])
 
             log.info('offer received %s, %s', id, message)
 
-            #self.setupPeer()
             self.watch_sid = id
-            # if enableLLM:
-            #     self.listener = onMessage
-            #     if (self.listener):
-            #         peer.context.addListener(self.listener)
-
-            # if self.peer:
-            #     description = RTCSessionDescription(sdp=message["sdp"], type=message["type"])
-            #     await self.peer.setRemoteDescription(description)
-
-            #     # add tracks if we have them
-
-            #     await self.peer.setLocalDescription(await self.peer.createAnswer())
-
-            #     local_description = self.peer.localDescription
-            #     await self.sio.emit("answer", (id,{"sdp": local_description.sdp, "type": local_description.type},))
             if peer:
                 description = RTCSessionDescription(sdp=message["sdp"], type=message["type"])
                 await peer.pc.setRemoteDescription(description)
@@ -304,10 +321,6 @@ class Agent:
         @self.sio.event
         async def disconnectPeer(id):
             log.info('disconnectPeer')
-            # if self.broadcaster == id and self.peer != None:
-            #     #self.peer.term()
-            #     self.peer = None
-            #     self.broadcaster = None
 
         @self.sio.event
         async def disconnect():
@@ -315,21 +328,6 @@ class Agent:
             if self.listener:
                 self.context.delListener(self.listener)
                 self.listener = None
-            # if self.peer is not None:
-            #     #self.peer.term()
-            #     self.peer = None
-
-
-
-# match = '.'
-# broadcaster = None
-# peer = None
-
-# connected=False
-
-
-
-
 
 # async def start():
 #     await sio.connect(SIGNAL_SERVER, transports=['websocket'])

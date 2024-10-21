@@ -16,7 +16,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-import datetime
+from datetime import datetime
 import json
 
 from openai import AsyncOpenAI
@@ -28,10 +28,15 @@ openai_api_key = config.get('openai_api_key')
 class LLM:
 
     client = AsyncOpenAI(api_key=openai_api_key)
-
-    def __init__(self):
+    nameIndex = 0
+    def __init__(self,id):
         #dirty
-        self.local_dt = datetime.datetime.utcnow()
+        self.created = datetime.utcnow() #now(datetime.timezone.utc)
+        self.id = id
+        self.name = f'Untitled {LLM.nameIndex}'
+        LLM.nameIndex += 1
+
+        self.local_dt = datetime.utcnow() #now(datetime.timezone.utc)
         self.date_time_string = self.local_dt.strftime("%A, %B %d, %Y %H:%M:%S %Z UTC")
         self.prompt_messages = [
             {
@@ -45,6 +50,11 @@ class LLM:
             },
         ]
         self.listeners = []
+        # self.peers = {}
+
+    def getMetaData(self):
+        return {'id':self.id,'name':self.name,'created':0}
+
 
     def addListener(self,l):
         # global messageListener
@@ -112,11 +122,13 @@ class LLM:
             }
         ]        
 
+        start = datetime.now()
         response = await LLM.client.chat.completions.create(
             model="gpt-4-1106-preview",
             messages=self.prompt_messages,
             tools=tools,
         )
+        log.info('Time for LLM Response: %d', (datetime.now()-start).total_seconds())
 
         response_message = response.choices[0].message
         tool_calls = response_message.tool_calls
@@ -141,21 +153,23 @@ class LLM:
                     location=function_args.get("location"),
                     unit=function_args.get("unit"),
                 )
-                if function_response:
-                    await self.appendMessage(
-                        {
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "name": function_name,
-                            "content": function_response,
-                            # "text": f"Calling {function_name}"
-                        }                
-                    )
+                # if function_response:
+                await self.appendMessage(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": function_response,
+                        "text": f"Calling {function_name}"
+                    }                
+                )
+            start = datetime.now()
             response = await LLM.client.chat.completions.create(
                 model="gpt-4-1106-preview",
                 messages=self.prompt_messages,
             )  # get a new response from the model where it can see the function response
             print('second call response:', response)
+            log.info('Time for llm tool processing: %d', (datetime.now()-start).total_seconds())
             response_message = response.choices[0].message
         await self.appendMessage({
             "role": "assistant",
