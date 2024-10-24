@@ -5,13 +5,15 @@
 - [X] get context history
 - [X] Client can select a context
 - [X] button for new context
-- [ ] setAudioCapture over peer connection
+- [X] setAudioCapture over peer connection
+- [ ] css for chat selection
 - [ ] context name and date send via events
-- [ ] context meta data over data channel
+- [X] context meta data over data channel
     * name, id, date created
-- [ ] show selected context in UI
+- [X] show selected context in UI
 - [ ] smoke test on phone
 - [X] No context… New context…
+- [ ] Chats by date; follow openai grouping
 - [ ] different clients with different contexts/peer connections
 - [ ] persistence chat contexts
 - [ ] persistence of tts text and audio files for dataset
