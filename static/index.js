@@ -45,6 +45,21 @@ function setContext(contextStr) {
   window.rtc?.setContext(contextStr)
 }
 
+let contexts = []
+let selectedContext = ''
+
+function refreshContexts() {
+  console.log('getContextsResult:', contexts);
+  h = '<ul>'
+  h += `<li><a href="." onclick="javascript:setContext('');return false;">New</a></li>`
+  for(c of contexts) {
+    mark = (c.id == selectedContext)?"*":""
+    h += `<li><a href="." onclick="javascript:setContext('${c.id}');return false;">${mark}${c.id}</a></li>`
+  }
+  h += '</ul>'
+  contextsDiv.innerHTML = h
+}
+
 function neoRTC(url) {
   this.url = url
   this.peers = []
@@ -104,15 +119,9 @@ function neoRTC(url) {
     // can I renegotiate media
     this.socket = io.connect(url,{auth: {token: urlParams.get('token')}})
 
-    this.socket.on("getContextsResult", (id, contexts)=>{
-      console.log('getContextsResult:', contexts);
-      h = '<ul>'
-      h += `<li><a href="." onclick="javascript:setContext('');return false;">New</a></li>`
-      for(c of contexts) {
-        h += `<li><a href="." onclick="javascript:setContext('${c.id}');return false;">${c.id}</a></li>`
-      }
-      h += '</ul>'
-      contextsDiv.innerHTML = h
+    this.socket.on("getContextsResult", (id, ctxs)=>{
+      contexts = ctxs
+      refreshContexts()
     })
 
     this.socket.on("peersChanged", (peers)=>{
@@ -227,6 +236,12 @@ function neoRTC(url) {
           appendLog(h)
         }
       }
+      // only update context select given id
+      function onMetaDataChanged(m) {
+        console.log('onMetaDatachanged', m)
+        selectedContext = m.id
+        refreshContexts()
+      }
       this.channel.onmessage = (e)=>{
         console.log(e.data)
         let m = JSON.parse(e.data)
@@ -234,9 +249,9 @@ function neoRTC(url) {
         console.log('from datachannel client:', m)
   
         if (m.t == 'replaceLog') replaceLog(m.p)
-        else if (m.t = 'appendLog') appendLog(m.p)
+        else if (m.t == 'appendLog') appendLog(m.p)
+        else if (m.t == 'onMetaDataChanged') onMetaDataChanged(m.p)
         else console.log('unhandled datachannel message')
-
       }
       this.channel.onclose = (e)=>{
         console.log('data channel closed')
@@ -287,8 +302,8 @@ function listen(f) {
   else {
     sendBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>'
   }
-  // todo
-  window.rtc.socket.emit('captureAudio',window.rtc.rtcTargetId,f)
+  if (window.rtc.channel)
+    window.rtc.channel.send(JSON.stringify({'t':'captureAudio','p':f}))
 }
 
 sendBtn.addEventListener('pointerdown',(e)=>{
