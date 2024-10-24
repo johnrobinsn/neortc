@@ -60,11 +60,6 @@ async def error(e):
     log.error('socket io error:', e)
 
 @sio.event
-async def captureAudio(sid,target_sid,f):
-    print('server.py captureAudio')
-    await sio.emit('captureAudio', (sid,f,), room=target_sid)
-
-@sio.event
 async def connect(sid,env,auth):
     print("in bound connection")
     token = auth.get('token','')
@@ -84,7 +79,7 @@ async def getContexts(sid,target_sid):
 @sio.event
 async def getContextsResult(sid,target_sid,contexts):
     log.info("forwarding reply getContextsResult %s", target_sid)
-    await sio.emit('getContextsResult',(sid,contexts,),room=target_sid if target_sid is not '' else None)
+    await sio.emit('getContextsResult',(sid,contexts,),room=target_sid if target_sid != '' else None)
 
 @sio.event
 async def broadcaster(sid,info):
