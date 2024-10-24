@@ -30,8 +30,7 @@ class LLM:
     client = AsyncOpenAI(api_key=openai_api_key)
     nameIndex = 0
     def __init__(self,id):
-        #dirty
-        self.created = datetime.utcnow() #now(datetime.timezone.utc)
+        self.created = datetime.utcnow().isoformat() + "Z"
         self.id = id
         self.name = f'Untitled {LLM.nameIndex}'
         LLM.nameIndex += 1
@@ -50,21 +49,35 @@ class LLM:
             },
         ]
         self.listeners = []
-        # self.peers = {}
+        self.metaDataListeners = []
 
     def getMetaData(self):
-        return {'id':self.id,'name':self.name,'created':0}
+        return {'id':self.id,'name':self.name,'created':self.created}
+    
+    def notifyMetaDataChanged(self):
+        for l in self.metaDataListeners:
+            l(self.getMetaData())        
 
+    def setName(self,n):
+        self.name = n
+        self.notifyMetaDataChanged()
 
     def addListener(self,l):
-        # global messageListener
-        self.delListener(l)
-        self.listeners.append(l)
+        if l:
+            self.listeners.append(l)
     
     def delListener(self, l):
         if l in self.listeners:
             self.listeners.remove(l)
 
+    def addMetaDatalistener(self,l):
+        if l:
+            self.metaDataListeners.append(l)
+            self.notifyMetaDataChanged()
+
+    def delMetaDataListener(self,l):
+        if l in self.metaDataListeners:
+            self.metaDataListeners.remove(l)
 
     # user,assistant,system
     async def appendMessage(self,m):

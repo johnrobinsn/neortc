@@ -66,6 +66,15 @@ class Peer:
         self.stt = STT() # could probably defer this until really needed
         self.dataChannel = None
  
+        def onMetaDataChanged(m):
+            print('********** onMetaDataChanged', m)
+            if self.dataChannel and self.dataChannel.readyState == 'open':
+                print('sending')
+                msg = {'t':'onMetaDataChanged','p':m}
+                self.dataChannel.send(json.dumps(msg))
+            else:
+                print('data channel not open')                
+
         # context modified update connected peers
         async def onMessage(m):
             # print("**** Message: ", m)
@@ -78,7 +87,8 @@ class Peer:
             if self.ttsTrack and m['role'] == 'assistant' and m['content']:
                 await self.ttsTrack.say(m['content'][0]['text'])  
 
-        self.listener = onMessage              
+        self.listener = onMessage
+        self.metaDataListener = onMetaDataChanged              
         agent.peers[self.key] = self
 
     def __del__(self):
@@ -87,27 +97,39 @@ class Peer:
     def setContext(self,context):
         print('setting context on peer', context)
         if self.context:
-            self.context.delListener(self.listener)
-            self.stt.setLLM(None)
-            self.context = None
+            if self.listener:
+                self.context.delListener(self.listener)
+            if self.metaDataListener:
+                self.context.delMetaDataListener(self.metaDataListener)
+
+        self.stt.setLLM(None)
+        self.context = None
         if context:
             self.context = context
-            self.stt.setLLM(self.context)
+            self.stt.setLLM(context)
+
+            print('*** warning self.listener:', self.listener)
             context.addListener(self.listener)
+
             # send log to peer
-            if self.dataChannel and self.dataChannel.readyState == 'open':
-                msg = {'t':'replaceLog','p':self.context.prompt_messages}
-                self.dataChannel.send(json.dumps(msg))
+            self.replaceLog()
+
+    def replaceLog(self):
+        if self.dataChannel and self.dataChannel.readyState == 'open':
+            msg = {'t':'onMetaDataChanged','p':self.context.getMetaData()}
+            self.dataChannel.send(json.dumps(msg))            
+            msg = {'t':'replaceLog','p':self.context.prompt_messages}
+            self.dataChannel.send(json.dumps(msg))
 
     def setupPeer(self):
-        
         @self.pc.on("datachannel")
         async def on_datachannel(channel):
             self.dataChannel = channel
             print('*** channel created',channel.readyState)
             if self.context:
-                msg = {'t':'replaceLog','p':self.context.prompt_messages}
-                self.dataChannel.send(json.dumps(msg))
+                self.context.addMetaDatalistener(self.metaDataListener)            
+            self.replaceLog()
+            # probably want to deter all listeners until channel is open
             @channel.on('open')
             async def on_open():
                 print("dc is open: ", channel.readyState)
@@ -122,7 +144,10 @@ class Peer:
                 if o['t'] == 'sendText':
                     await self.context.prompt(o['p'])                    
                 elif o['t'] == 'setContext':
-                    self.setContext(await agent.getContext(o['p']))                
+                    self.setContext(await agent.getContext(o['p']))
+                elif o['t'] == 'captureAudio':
+                    await self.stt.setCaptureAudio(o['p'])
+
 
             @channel.on('close')
             async def on_close():
@@ -214,9 +239,7 @@ class Agent:
             return self.peers[sid]
         else:
             c = await self.getContext(contextStr)
-            # Peer init will add peer to agent::peers
             p = Peer(c,sid)
-            #self.peers[sid] = p
             p.setContext(c)
             return p
         
@@ -265,20 +288,6 @@ class Agent:
             log.info("agent:getContexts")
             await self.updateContexts(id=id)
 
-        # @self.sio.event
-        # async def sendText(sid,t):
-        #     peer = self.getPeer(sid)
-        #     m = re.search(r'\w*\\([^ ]+) (.*)',t)
-        #     if m:
-        #         c = m.group(1)
-        #         if c == 'say':
-        #             await peer.ttsTrack.say(m.group(2))
-        #         else:
-        #             log.warning('unknown escaped command:', c)
-        #     else:
-        #         # await llm.prompt(t)
-        #         pass
-
         @self.sio.event
         async def captureAudio(sid,f):
             peer = self.getPeer(sid)
@@ -326,9 +335,6 @@ class Agent:
         @self.sio.event
         async def disconnect():
             log.info('Watcher Disconnected')
-            if self.listener:
-                self.context.delListener(self.listener)
-                self.listener = None
 
 # async def start():
 #     await sio.connect(SIGNAL_SERVER, transports=['websocket'])
