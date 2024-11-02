@@ -17,6 +17,8 @@
 # limitations under the License.
 */
 
+let enableVideo=false
+
 let peerConnection;
 const config = {
   iceServers: [
@@ -40,9 +42,14 @@ const sendTxt = document.querySelector('#sendTxt')
 const sendBtn = document.querySelector('#sendBtn')
 const sockStatus = document.querySelector("#sockStatus")
 const peerStatus = document.querySelector('#peerStatus')
+const stopAudio = document.querySelector('#stopAudio')
 
 function setContext(contextStr) {
   window.rtc?.setContext(contextStr)
+}
+
+function setAudioEnabled(f) {
+  window.rtc?.setAudioEnabled(f)
 }
 
 let contexts = []
@@ -53,8 +60,8 @@ function refreshContexts() {
   h = '<ul>'
   h += `<li><a href="." onclick="javascript:setContext('');return false;">New</a></li>`
   for(c of contexts) {
-    mark = (c.id == selectedContext)?"*":""
-    h += `<li><a href="." onclick="javascript:setContext('${c.id}');return false;">${mark}${c.id}</a></li>`
+    cl = (c.id == selectedContext)?"selected":""
+    h += `<li class="${cl}"><a href="." onclick="javascript:setContext('${c.id}');return false;">${c.display}-${new Date(c.created).toLocaleString()}</a></li>`
   }
   h += '</ul>'
   contextsDiv.innerHTML = h
@@ -108,6 +115,16 @@ function neoRTC(url) {
   this.sendText = (t)=>{
     if (this.channel)
       this.channel.send(JSON.stringify({'t':'sendText','p':t}))
+  }
+
+  this.sendStopAudio = ()=>{
+    if (this.channel)
+      this.channel.send(JSON.stringify({'t':'clearAudio'}))
+  }
+
+  this.setAudioEnabled = (f)=>{
+    if (this.channel)
+      this.channel.send(JSON.stringify({'t':'enableAudio','p':f}))
   }
 
   this.connect = (url)=>{
@@ -191,13 +208,17 @@ function neoRTC(url) {
     this.peerConnection = new RTCPeerConnection(config);
   
     // adding local tracks camera
-    if (videoElement) {
-    let stream = videoElement.srcObject;
+    
+    
+    //if (videoElement) {
+    //let stream = videoElement.srcObject;
     window.stream.getTracks().forEach(track => {
       this.peerConnection.addTrack(track, stream)
       console.log('adding local tracks:', track, stream)
     });
-    }
+    //}
+    
+    
   
     console.log('registering ontrack handler')  
       this.peerConnection.ontrack = e=>{
@@ -262,8 +283,11 @@ function neoRTC(url) {
 
     }
 
+    console.log('Sending Offer')
+    // .createOffer() work with audio/video
+    //({offerToReceiveAudio: true,offerToReceiveVideo: false})//.createOffer()
     this.peerConnection
-    .createOffer()//({offerToReceiveAudio: true,offerToReceiveVideo: false})//.createOffer()
+    .createOffer({offerToReceiveAudio: true,offerToReceiveVideo: enableVideo})//.createOffer()
       .then(sdp => this.peerConnection.setLocalDescription(sdp))
       .then(() => {
         this.socket.emit("offer", this.rtcTargetId, this.peerConnection.localDescription, "");
@@ -290,6 +314,10 @@ sendTxt.addEventListener("keydown",(e)=>{
 
 sendTxt.addEventListener("input", (e)=>{
   sendBtn.innerHTML = (sendTxt.value.length > 0)?'<i class="fa-solid fa-paper-plane"></i>':'<i class="fa-solid fa-microphone"></i>'
+})
+
+stopAudio.addEventListener('click',(e)=>{
+  window.rtc.sendStopAudio()
 })
 
 let listening = false
@@ -365,10 +393,16 @@ function getStream() {
   }
   const audioSource = audioSelect.value;
   const videoSource = videoSelect.value;
-  const constraints = {
-    audio: { deviceId: audioSource ? { exact: audioSource } : undefined },
-    video: { deviceId: videoSource ? { exact: videoSource } : undefined }
+  let constraints = {
+    audio: { deviceId: audioSource ? { exact: audioSource } : undefined }//,
+    //video: { deviceId: videoSource ? { exact: videoSource } : undefined }
   };
+  if (enableVideo) {
+    constraints = {
+      audio: { deviceId: audioSource ? { exact: audioSource } : undefined },
+      video: { deviceId: videoSource ? { exact: videoSource } : undefined }
+    };
+  }
   return navigator.mediaDevices
     .getUserMedia(constraints)
     .then(gotStream)
@@ -380,10 +414,12 @@ function gotStream(stream) {
   audioSelect.selectedIndex = [...audioSelect.options].findIndex(
     option => option.text === stream.getAudioTracks()[0].label
   );
-  videoSelect.selectedIndex = [...videoSelect.options].findIndex(
-    option => option.text === stream.getVideoTracks()[0].label
-  );
-  videoElement.srcObject = stream;
+  if (enableVideo) {
+    videoSelect.selectedIndex = [...videoSelect.options].findIndex(
+      option => option.text === stream.getVideoTracks()[0].label
+    );
+    videoElement.srcObject = stream;
+  }
   console.log('urlParams:', urlParams)
 
   window.rtc.resolveMedia()

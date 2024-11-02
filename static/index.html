@@ -17,11 +17,11 @@
         <div id="watching"></div>
         <div id="peers"></div>
         <div id="contexts">some contexts for you</div>
+        <br/>
+        <div>version:<span id="version"></span></div>
 
-        version:<div id="version"></div>
-
-        status:<div id='sockStatus'>disconnected</div>
-        peerStatus:<div id="peerStatus">peerStatus</div>    
+        <div>status:<span id='sockStatus'>disconnected</span></div>
+        <div>peerStatus:<span id="peerStatus">peerStatus</span></div>
         <!-- <div style="visibility: collapse;"> -->
         <section class="select">
           <label for="audioSource">Audio source: </label>
@@ -35,6 +35,11 @@
 
         <video id="local_video" playsinline autoplay muted></video> 
 
+        <div><button id="stopAudio">Stop Audio</button></div>
+
+        <label>
+          <input type="checkbox" id="toggleCheckbox" onclick="setAudioEnabled(this.checked)"> Enable Audio
+      </label>
       </div>
     </div>
 
@@ -57,10 +62,10 @@
         console.log('in onload')
         $('#menubutton').click(function(){
           console.log('clicked')
-          if ( $('#panel').css('visibility') == 'hidden' )
-            $('#panel').css('visibility','visible');
+          if ( $('#panel').css('display') == 'none' )
+            $('#panel').css('display','block');
           else
-            $('#panel').css('visibility','hidden');
+            $('#panel').css('display','none');
         })
       })
     </script>    

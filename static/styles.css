@@ -45,10 +45,12 @@ video {
 }
 
 #panel {
-  background-color: #797070c0;
+  background-color: #797070;
   border-radius: 10px;
   padding: 15px;
-  visibility: hidden;
+  display: none;
+  height: 600px;
+  overflow: auto;
 }
 #panelcontainer {
   position: absolute;
@@ -140,3 +142,5 @@ button {
 .system {color: red;}
 
 pre { white-space: pre-wrap; }
+
+.selected {background-color: #04AA6D; color: white;}
