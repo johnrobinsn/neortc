@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 
 from config import config
 neortc_secret = config.get('neortc_secret')
+print('neortc_secret:',neortc_secret)
 
 from os import kill, getpid
 from ssl import SSLContext, PROTOCOL_TLS_SERVER
@@ -173,8 +174,14 @@ app.on_shutdown.append(on_shutdown)
 default_host='*'
 default_port = config.get('neortc_port')
 
+cert_file = config.get('neortc_cert','./mycert.pem')
+key_file = config.get('neortc_key','./mykey.pem')
+
+print('cert_file:', cert_file)
+print('key_file:', key_file)
+
 ssl_context = SSLContext(PROTOCOL_TLS_SERVER)
-ssl_context.load_cert_chain('./mycert.pem','./mykey.pem')
+ssl_context.load_cert_chain(cert_file,key_file)
 
 print("Starting webserver port:", default_port)
 web.run_app(app, host=default_host, port=default_port, ssl_context=ssl_context)
