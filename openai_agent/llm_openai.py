@@ -193,3 +193,4 @@ class LLM:
                 },
             ],
         })
+        return response_message.content
