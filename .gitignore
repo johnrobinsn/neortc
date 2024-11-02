@@ -6,3 +6,4 @@ api_key.py
 *.pcm
 todo.md
 api_key_openai.py
+openai_agent/openai_chats
