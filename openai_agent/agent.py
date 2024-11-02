@@ -20,7 +20,9 @@ import logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-import re
+# import uuid
+# import re
+import os
 import asyncio
 from socketio import AsyncClient
 from aiortc import RTCSessionDescription, RTCPeerConnection, RTCConfiguration, RTCIceServer
@@ -66,7 +68,7 @@ class Peer:
         self.stt = STT() # could probably defer this until really needed
         self.dataChannel = None
  
-        def onMetaDataChanged(m):
+        async def onMetaDataChanged(m):
             print('********** onMetaDataChanged', m)
             if self.dataChannel and self.dataChannel.readyState == 'open':
                 print('sending')
@@ -147,7 +149,10 @@ class Peer:
                     self.setContext(await agent.getContext(o['p']))
                 elif o['t'] == 'captureAudio':
                     await self.stt.setCaptureAudio(o['p'])
-
+                elif o['t'] == 'clearAudio':
+                    self.ttsTrack.clearAudio()
+                elif o['t'] == 'enableAudio':
+                    self.ttsTrack.enableAudio(o['p'])
 
             @channel.on('close')
             async def on_close():
@@ -216,20 +221,42 @@ class Agent:
 
         self.listener = None
 
-        self.contexts = {}
+        self.contexts = self.loadAll()
         self.peers = {}
+    
+    def loadAll(self):
+        c = {}
+        dir = 'openai_chats'
+        try:
+            files = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
+            for index, file in enumerate(files, start=1):
+                print(f"{index}. {file}")
+                l = LLM()
+                l.load(f'{dir}/{file}')
+                c[l.id] = l
+                async def onContextMetaDataChanged(m):
+                    await self.updateContexts()
+                l.addMetaDatalistener(onContextMetaDataChanged)
+        except Exception as e:
+            print(f"Error reading directory: {e}")
+        return c
 
     async def getContext(self, cid):
         print('Getting context: ', cid)
         if cid in self.contexts:
             return self.contexts[cid]
         else:
-            if not cid:
-                # create a context Str
-                cid = f'context{Agent.nextContextId}'
-                Agent.nextContextId += 1            
-            l = LLM(cid)
-            self.contexts[cid] = l
+            # if not cid:
+            #     # create a context Str
+            #     cid = f'context{Agent.nextContextId}'
+            #     cid = str(uuid.uuid4())
+            #     Agent.nextContextId += 1            
+            # l = LLM(cid)
+            l = LLM()
+            self.contexts[l.id] = l
+            async def onContextMetaDataChanged(m):
+                await self.updateContexts()
+            l.addMetaDatalistener(onContextMetaDataChanged)
             await self.updateContexts() # broadcast
             return l
 
@@ -288,10 +315,10 @@ class Agent:
             log.info("agent:getContexts")
             await self.updateContexts(id=id)
 
-        @self.sio.event
-        async def captureAudio(sid,f):
-            peer = self.getPeer(sid)
-            await peer.stt.setCaptureAudio(f)
+        # @self.sio.event
+        # async def captureAudio(sid,f):
+        #     peer = self.getPeer(sid)
+        #     await peer.stt.setCaptureAudio(f)
 
         @self.sio.event
         async def broadcaster():
@@ -308,12 +335,17 @@ class Agent:
 
             self.watch_sid = id
             if peer:
+                #message = json.loads(message)
+                print('message:',message)
                 description = RTCSessionDescription(sdp=message["sdp"], type=message["type"])
                 await peer.pc.setRemoteDescription(description)
 
                 # add tracks if we have them
 
-                await peer.pc.setLocalDescription(await peer.pc.createAnswer())
+                try:
+                    await peer.pc.setLocalDescription(await peer.pc.createAnswer())
+                except Exception as e:
+                    print(f"Task failed with error: {e}")
 
                 local_description = peer.pc.localDescription
                 await self.sio.emit("answer", (id,{"sdp": local_description.sdp, "type": local_description.type},))

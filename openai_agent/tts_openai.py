@@ -47,9 +47,22 @@ class TTSTrack:
         self.gcodec = None
         self.gsample_rate = 0
         self.gchannels = 0
+        self.audioEnabled = False
         self._createTTSTrack()
 
+    def clearAudio(self):
+        self.packetq.clear()
+    
+    def enableAudio(self,f):
+        log.info('enableAudio: %s',f)
+        if not f:
+            self.clearAudio()
+        self.audioEnabled = f
+        
     async def say(self,t):
+        if not self.audioEnabled:
+            log.info('audio disabled')
+            return
         start = datetime.now()
         def on_segment(channels, sample_rate, segment):
             nonlocal start
