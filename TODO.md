@@ -1,34 +1,54 @@
 # TODO
 
 ## General
+- [ ] multiple live models
+- [ ] start local model
+- [ ] notebook mode
+- [ ] think about incremental development model... how can I use... while building
+- [ ] if not secret configured not easy to tell that it's insecure.  should probably fail
+- [ ] future proof server.py
+- [ ] separate cache of contexts from list of contexts; some gc of contexts... 
+- [ ] Move UUIDs to LLM
+- [ ] Add modified date to metadata
+- [ ] dynamic audio/video from agent
+- [ ] for "say" am I incurring multiple tts calls and just streaming audio over peers
+- [ ] service client UI from agent so that I can update both sides
+- [ ] Chats by date; follow openai grouping
+- [ ] different clients with different contexts/peer connections
+- [ ] persistence of tts text and audio files for dataset
+- [ ] persistence of stt audio and text for dataset
+- [ ] Make video optional (dynamic from UI) 
+- [X] persistence chat contexts json or sqlite? json files seems easier for now
+- [X] No context… New context…
+- [X] show selected context in UI
+- [X] metadata listener on loaded contexts... refactor
+- [X] Use summarization to generate chat display name
+- [X] Create timestamp (best practices for webservices)
 - [X] multiple contexts
 - [X] get context history
 - [X] Client can select a context
 - [X] button for new context
 - [X] setAudioCapture over peer connection
-- [ ] css for chat selection
-- [ ] context name and date send via events
+- [X] css for chat selection
+- [X] context name and date send via events
 - [X] context meta data over data channel
-    * name, id, date created
-- [X] show selected context in UI
-- [ ] smoke test on phone
-- [X] No context… New context…
-- [ ] Chats by date; follow openai grouping
-- [ ] different clients with different contexts/peer connections
-- [ ] persistence chat contexts
-- [ ] persistence of tts text and audio files for dataset
-- [ ] persistence of stt audio and text for dataset
-- [ ] Use summarization to generate chat display name
-- [ ] Create timestamp (best practices for webservices)
-
+- [X] Make tts audio optional disable from server side (dynamic from UI) default to off
+- [X] smoke test on phone; fix UI so basically useful
+- [X] just disable video on clientside for now.
+- [X] autostart server
+- [X] use appzero certs
 ## My Agent
+- [ ] wire up llama as llm
 - [ ] Todo List is a note type
+- [ ] continuous listening
 
 ## Futures
 - [ ] Sound Mixing; System Sounds
 - [ ] Peerconnection retry strategy… ice restart etc
 - [ ] Ability to interupt streaming at anytime. When changing context.
 - [ ] Different audio stream types.  system or context
+- [ ] stop speaking needs to stop in flight requests to stt server
+- [ ] text to speech speaking speed
 
 ---
 
