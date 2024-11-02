@@ -18,21 +18,24 @@ log = logging.getLogger(__name__)
 
 from datetime import datetime
 import json
+import os
+import copy
 
 from openai import AsyncOpenAI
 # from auth_openai import api_key
 from aconfig import config
+import uuid
 
 openai_api_key = config.get('openai_api_key')
 
 class LLM:
-
     client = AsyncOpenAI(api_key=openai_api_key)
     nameIndex = 0
-    def __init__(self,id):
+    def __init__(self):
         self.created = datetime.utcnow().isoformat() + "Z"
-        self.id = id
-        self.name = f'Untitled {LLM.nameIndex}'
+        self.id = str(uuid.uuid4())
+        self.name = ''
+        self.summary = ''
         LLM.nameIndex += 1
 
         self.local_dt = datetime.utcnow() #now(datetime.timezone.utc)
@@ -50,17 +53,43 @@ class LLM:
         ]
         self.listeners = []
         self.metaDataListeners = []
+        # self.save()
+
+    def save(self):
+        j = {
+            'id':self.id,
+            'name':self.name,
+            'summary':self.summary,
+            'created':self.created,
+            'log':self.prompt_messages,
+        }
+        os.makedirs('openai_chats', exist_ok=True)
+        with open(f'openai_chats/{self.id}.json', 'w') as file:
+            file.write(json.dumps(j))
+
+    def load(self,path):
+        with open(path,'r') as file:
+            j = json.load(file)
+            self.id = j.get('id','')
+            self.name = j.get('name','')
+            self.summary = j.get('summary','')
+            self.created = j.get('created','')
+            self.prompt_messages = j.get('log',[])
 
     def getMetaData(self):
-        return {'id':self.id,'name':self.name,'created':self.created}
+        display = self.name
+        if not display: display = self.summary
+        if not display: display = 'Untitled'
+        return {'id':self.id,'display':display,'summary':self.summary,'name':self.name,'created':self.created}
     
-    def notifyMetaDataChanged(self):
+    async def notifyMetaDataChanged(self):
         for l in self.metaDataListeners:
-            l(self.getMetaData())        
+            await l(self.getMetaData())
+        # self.save()       
 
-    def setName(self,n):
+    async def setName(self,n):
         self.name = n
-        self.notifyMetaDataChanged()
+        await self.notifyMetaDataChanged()
 
     def addListener(self,l):
         if l:
@@ -73,7 +102,7 @@ class LLM:
     def addMetaDatalistener(self,l):
         if l:
             self.metaDataListeners.append(l)
-            self.notifyMetaDataChanged()
+            # self.notifyMetaDataChanged()
 
     def delMetaDataListener(self,l):
         if l in self.metaDataListeners:
@@ -84,12 +113,37 @@ class LLM:
         self.prompt_messages.append(m)
         for l in self.listeners:
             await l(m if isinstance(m, dict) else m.__dict__)
+        
+        # ask model to summarize conversation
+        summary = await self.summarize()
+        print("Summary:", summary)
+        if self.summary != summary:
+            self.summary = summary
+            await self.notifyMetaDataChanged()
+        self.save()
 
     def getMessages(self):
-        return self.prompt_messages        
+        return self.prompt_messages
+
+    async def summarize(self):
+        log = copy.deepcopy(self.prompt_messages)
+        log.append({
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": 'Can you summarize the conversation so far in four words or less?'
+                },
+            ],
+        })
+        response = await LLM.client.chat.completions.create(
+            model="gpt-4-1106-preview",
+            messages=log,
+        )
+        response_message = response.choices[0].message
+        return response_message.content               
 
     async def prompt(self,t):
-        print('in prompt')
         await self.appendMessage({
                 "role": "user",
                 "content": [
@@ -99,7 +153,6 @@ class LLM:
                     },
                 ],
             })
-        
 
         # Example dummy function hard coded to return the same weather
         # In production, this could be your backend API or an external API
@@ -193,4 +246,4 @@ class LLM:
                 },
             ],
         })
-        return response_message.content
+
