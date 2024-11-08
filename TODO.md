@@ -3,6 +3,7 @@
 ## General
 - [ ] multiple live models
 - [ ] start local model
+- [ ] RAG retrieval
 - [ ] notebook mode
 - [ ] think about incremental development model... how can I use... while building
 - [ ] if not secret configured not easy to tell that it's insecure.  should probably fail
