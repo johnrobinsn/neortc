@@ -60,9 +60,15 @@ sio = AsyncServer(cors_allowed_origins='*')
 async def error(e):
     log.error('socket io error:', e)
 
+import urllib
+
 @sio.event
 async def connect(sid,env,auth):
-    print("in bound connection")
+    query_string = env.get('QUERY_STRING', '')
+    query_params = urllib.parse.parse_qs(query_string)
+    agentname = query_params.get('agent', [None])[0]
+
+    print("in bound connection, ", agentname)
     token = auth.get('token','')
     if neortc_secret and token != neortc_secret:
         print("auth failed; disonnecting")

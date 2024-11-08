@@ -34,7 +34,7 @@ const config = {
 };
 
 const urlParams = new URLSearchParams(window.location.search);
-const peers = document.querySelector("#peers")
+const peersDiv = document.querySelector("#peers")
 const contextsDiv = document.querySelector("#contexts")
 const remoteAudio = document.querySelector('#remote-audio')
 const chatLog = document.querySelector("#chat-log")
@@ -44,8 +44,14 @@ const sockStatus = document.querySelector("#sockStatus")
 const peerStatus = document.querySelector('#peerStatus')
 const stopAudio = document.querySelector('#stopAudio')
 
+function setAgent(id) {
+  window.rtc.rtcConnect(id)
+}
+
 function setContext(contextStr) {
+  try {
   window.rtc?.setContext(contextStr)
+  } catch(e) { console.log(e)}
 }
 
 function setAudioEnabled(f) {
@@ -54,6 +60,16 @@ function setAudioEnabled(f) {
 
 let contexts = []
 let selectedContext = ''
+
+function refreshPeers() {
+  console.log('refreshPeers:', peers);
+  h = '<ul>'
+  for(let p in peers) {
+    h += `<li><a href="." onclick="javascript:setAgent('${p}');return false;">${peers[p].displayName}</a></li>`
+  }
+  h += '</ul>'
+  peersDiv.innerHTML = h
+}
 
 function refreshContexts() {
   console.log('getContextsResult:', contexts);
@@ -96,6 +112,8 @@ function neoRTC(url) {
 
   this.rtcDisconnect = ()=>{
     if (this.peerConnection) {
+      if (this.channel)
+        this.channel.close()
       this.peerConnection.close()
       this.peerConnection = null
       this.rtcTargetId = null
@@ -104,7 +122,7 @@ function neoRTC(url) {
   }
 
   this.rtcConnect = (targetId,video,audio)=>{
-    this.mediaPromise.then((targetId,video,audio)=>{this._rtcConnect(targetId,video,audio)})
+    this.mediaPromise.then(()=>{this._rtcConnect(targetId,video,audio)})
   }
   
   this.setContext = (t)=>{
@@ -197,16 +215,17 @@ function neoRTC(url) {
   }
 
   this._rtcConnect = (targetId,video,audio) => {
+    this.rtcTargetId = targetId
 
     this.socket.emit("getContexts", this.rtcTargetId)
 
     this.rtcDisconnect()
 
-    this.rtcTargetId = targetId
   
     console.log("in watch handler")
     this.peerConnection = new RTCPeerConnection(config);
-  
+    this._remoteDescriptionSet = false
+    this._cachedIceCandidates = []
     // adding local tracks camera
     
     
@@ -438,8 +457,13 @@ window.onload = ()=>{
   rtc.onPeerConnectionStateChange = (f)=>{
     peerStatus.innerHTML = f
   }
+  rtc.onPeersChanged = (p)=>{
+    console.log('peers', p)
+    peers = p
+    refreshPeers()
+  }
   rtc.connect(window.location.origin)
-  rtc.rtcConnect()
+  //rtc.rtcConnect()
   window.rtc = rtc
   sendTxt.focus()
 }
