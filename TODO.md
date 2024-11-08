@@ -1,7 +1,8 @@
 # TODO
 
 ## General
-- [ ] multiple live models
+- [ ] multiple live models; multiple agents; 
+- [ ] app not scrolling to bottom when agent is adding history.
 - [ ] start local model
 - [ ] RAG retrieval
 - [ ] notebook mode
