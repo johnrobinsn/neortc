@@ -170,7 +170,8 @@ class Peer:
 
             if state == 'closed' or state == 'failed':
                 self.setContext(None)
-                del agent.peers[self.key]
+                if self.key:
+                    del agent.peers[self.key]
                 print('removing peer from agent', self.key)
                 print('Total Peers: ', len(agent.peers))
 
@@ -260,15 +261,26 @@ class Agent:
             await self.updateContexts() # broadcast
             return l
 
+    # async def createPeer(self,sid,contextStr = ''):
+    #     print('Getting Peer for Client: ', sid)
+    #     if sid in self.peers:
+    #         return self.peers[sid]
+    #     else:
+    #         c = await self.getContext(contextStr)
+    #         p = Peer(c,sid)
+    #         p.setContext(c)
+    #         return p
+
     async def createPeer(self,sid,contextStr = ''):
-        print('Getting Peer for Client: ', sid)
+        print('***** creating a new peer')
         if sid in self.peers:
-            return self.peers[sid]
-        else:
-            c = await self.getContext(contextStr)
-            p = Peer(c,sid)
-            p.setContext(c)
-            return p
+            p = self.peers[sid]
+            del self.peers[sid]
+            p.key = None
+        c = await self.getContext(contextStr)
+        p = Peer(c,sid)
+        p.setContext(c)
+        return p
         
     def getPeer(self,sid):
         if (sid in self.peers):
@@ -304,7 +316,7 @@ class Agent:
             log.info('Watcher Connected')
             await self.sio.emit('watcher')
 
-            displayName = 'oai_agent'
+            displayName = config.get('agent_name','default')
 
             # print('broadcasting:', displayName)
             await self.sio.emit("broadcaster", {'displayName':displayName});
@@ -386,7 +398,7 @@ class Agent:
 
 import traceback
 if __name__ == "__main__":
-    signal_server = config.get('agent_signal_server','')
+    signal_server = f"{config.get('agent_signal_server','')}?agent={config.get('agent_name','default')}"
     if not signal_server:
         log.error('No signal server defined')
         exit(0)
