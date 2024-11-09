@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -36,6 +37,8 @@ class LLM:
         self.id = str(uuid.uuid4())
         self.name = ''
         self.summary = ''
+        self.persisted = False
+        self.dead = False
         LLM.nameIndex += 1
 
         self.local_dt = datetime.utcnow() #now(datetime.timezone.utc)
@@ -66,6 +69,7 @@ class LLM:
         os.makedirs('openai_chats', exist_ok=True)
         with open(f'openai_chats/{self.id}.json', 'w') as file:
             file.write(json.dumps(j))
+        self.persisted = True
 
     def load(self,path):
         with open(path,'r') as file:
@@ -75,6 +79,7 @@ class LLM:
             self.summary = j.get('summary','')
             self.created = j.get('created','')
             self.prompt_messages = j.get('log',[])
+        self.persisted = True
 
     def getMetaData(self):
         display = self.name
@@ -98,6 +103,10 @@ class LLM:
     def delListener(self, l):
         if l in self.listeners:
             self.listeners.remove(l)
+        if len(self.listeners) == 0 and not self.persisted:
+            self.dead = True
+        #asyncio.run(self.notifyMetaDataChanged())
+        asyncio.get_event_loop().create_task(self.notifyMetaDataChanged())
 
     def addMetaDatalistener(self,l):
         if l:

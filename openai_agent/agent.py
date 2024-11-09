@@ -32,8 +32,6 @@ from aconfig import config
 
 # TODO silent error if connection fails
 SIGNAL_SERVER = f'wss://localhost:{config.get("neortc_port")}'
-# from auth_neortc import neortc_secret
-#from config import config
 neortc_secret = config.get('neortc_secret')
 
 enableTTS = True
@@ -170,8 +168,7 @@ class Peer:
 
             if state == 'closed' or state == 'failed':
                 self.setContext(None)
-                if self.key:
-                    del agent.peers[self.key]
+                del agent.peers[self.key]
                 print('removing peer from agent', self.key)
                 print('Total Peers: ', len(agent.peers))
 
@@ -256,6 +253,10 @@ class Agent:
             l = LLM()
             self.contexts[l.id] = l
             async def onContextMetaDataChanged(m):
+                # garbage collecting
+                for k in list(self.contexts.keys()):
+                    if self.contexts[k].dead:
+                        del self.contexts[k]                
                 await self.updateContexts()
             l.addMetaDatalistener(onContextMetaDataChanged)
             await self.updateContexts() # broadcast
@@ -271,20 +272,20 @@ class Agent:
     #         p.setContext(c)
     #         return p
 
-    async def createPeer(self,sid,contextStr = ''):
+    async def createPeer(self,sid,key,contextStr = ''):
         print('***** creating a new peer')
-        if sid in self.peers:
-            p = self.peers[sid]
-            del self.peers[sid]
-            p.key = None
+        # if sid in self.peers:
+        #     p = self.peers[sid]
+        #     del self.peers[sid]
+        #     p.key = None
         c = await self.getContext(contextStr)
-        p = Peer(c,sid)
+        p = Peer(c,key)
         p.setContext(c)
         return p
         
-    def getPeer(self,sid):
-        if (sid in self.peers):
-            return self.peers[sid]
+    def getPeer(self,key):
+        if (key in self.peers):
+            return self.peers[key]
         else:
             print("ERROR: Unknown peer!")
 
@@ -337,10 +338,10 @@ class Agent:
             await self.sio.emit('watcher')
 
         @self.sio.event
-        async def offer(id,message,contextStr):  # initiating message; id is watching
+        async def offer(id,message,contextStr,key):  # initiating message; id is watching
             # global watch_sid
             print("**** requested context: ", contextStr)
-            peer = await self.createPeer(id,contextStr)
+            peer = await self.createPeer(id,key,contextStr)
             print("id:", id, " peer: ", peer)
 
             log.info('offer received %s, %s', id, message)
@@ -363,8 +364,8 @@ class Agent:
                 await self.sio.emit("answer", (id,{"sdp": local_description.sdp, "type": local_description.type},))
 
         @self.sio.event
-        async def candidate(id,message):
-            peer = self.getPeer(id)
+        async def candidate(id,message,key):
+            peer = self.getPeer(key)
             log.info('candidate received, %s, %s', id, message)
             if peer.pc != None:
                 c = candidate_from_sdp(message["candidate"].split(":", 1)[1])
