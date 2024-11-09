@@ -106,17 +106,17 @@ async def watch(sid, target_sid):
     await sio.emit('watcher', (sid,), room=target_sid)
 
 @sio.event
-async def offer(sid, target_sid, message, context):
-    await sio.emit('offer', (sid, message, context), room=target_sid)
+async def offer(sid, target_sid, message, context, key):
+    await sio.emit('offer', (sid, message, context, key), room=target_sid)
 
 @sio.event
 async def answer(sid, target_sid, message):
     await sio.emit('answer', (sid, message), room=target_sid)
 
 @sio.event
-async def candidate(sid, target_sid, message):
+async def candidate(sid, target_sid, message, key):
     log.info("Forwarding candidate; target: %s, message: %s", target_sid, message)
-    await sio.emit('candidate', (sid, message), room=target_sid)
+    await sio.emit('candidate', (sid, message, key), room=target_sid)
 
 @sio.event
 async def disconnect(sid):
