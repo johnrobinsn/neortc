@@ -7,10 +7,15 @@
 - [ ] RAG retrieval
 - [ ] notebook mode
 - [ ] think about incremental development model... how can I use... while building
-- [ ] if not secret configured not easy to tell that it's insecure.  should probably fail
+- [ ] make agent selection s
+- [ ] refactor/cleanup codeticky in UI (cookie?)
+- [ ] show agent selection in UI
+- [ ] autoselect agent (agent priorit; prod/stage/dev)- [ ] if not secret configured not easy to tell that it's insecure.  should probably fail
 - [ ] future proof server.py
+- [ ] refactor UI for mobile usability
 - [ ] separate cache of contexts from list of contexts; some gc of contexts... 
 - [ ] Move UUIDs to LLM
+- [ ] Move Peer UUID allocation to agent (away from UI)
 - [ ] Add modified date to metadata
 - [ ] dynamic audio/video from agent
 - [ ] for "say" am I incurring multiple tts calls and just streaming audio over peers
@@ -20,6 +25,7 @@
 - [ ] persistence of tts text and audio files for dataset
 - [ ] persistence of stt audio and text for dataset
 - [ ] Make video optional (dynamic from UI) 
+- [ ] some memory system.  How do I decouple interaction memories from agents?  
 - [X] persistence chat contexts json or sqlite? json files seems easier for now
 - [X] No context… New context…
 - [X] show selected context in UI
