@@ -20,8 +20,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# import uuid
-# import re
 import os
 import asyncio
 from socketio import AsyncClient
@@ -46,7 +44,7 @@ if enableTTS:
 
 # for each context
 if enableLLM:
-    from llm_openai import LLM
+    from llm import LLM
 
 import json
 class Peer:

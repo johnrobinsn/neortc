@@ -23,13 +23,73 @@ import os
 import copy
 
 from openai import AsyncOpenAI
+
+from llama3async import startWorker, prompt as llama3prompt
+
+
+startWorker()
+
 # from auth_openai import api_key
 from aconfig import config
 import uuid
 
+from abc import ABC, abstractmethod
+
 openai_api_key = config.get('openai_api_key')
 
-class LLM:
+class ILLM(ABC):
+    @abstractmethod
+    async def setName(self,n):
+        pass
+
+    @abstractmethod
+    def addListener(self,l):
+        pass
+
+    @abstractmethod
+    def delListener(self,l):
+        pass
+
+    @abstractmethod
+    def addMetaDatalistener(self,l):
+        pass
+
+    @abstractmethod
+    def delMetaDataListener(self,l):
+        pass
+
+    @abstractmethod
+    async def appendMessage(self,m):
+        pass
+
+    @abstractmethod
+    def getMessages(self):
+        pass
+
+    @abstractmethod
+    async def prompt(self,t):
+        pass
+
+    @abstractmethod
+    def getMetaData(self):
+        pass
+
+    async def notifyMetaDataChanged(self):
+        pass
+
+    @abstractmethod
+    async def summarize(self):
+        pass
+
+    @abstractmethod
+    def save(self):
+        pass
+
+    @abstractmethod
+    def load(self,path):
+        pass
+
+class LLM(ILLM):
     client = AsyncOpenAI(api_key=openai_api_key)
     nameIndex = 0
     def __init__(self):
@@ -145,12 +205,13 @@ class LLM:
                 },
             ],
         })
-        response = await LLM.client.chat.completions.create(
-            model="gpt-4-1106-preview",
-            messages=log,
-        )
-        response_message = response.choices[0].message
-        return response_message.content               
+        # response = await LLM.client.chat.completions.create(
+        #     model="gpt-4-1106-preview",
+        #     messages=log,
+        # )
+        # response_message = response.choices[0].message
+        # return response_message.content  
+        return await llama3prompt(log)             
 
     async def prompt(self,t):
         await self.appendMessage({
@@ -163,96 +224,159 @@ class LLM:
                 ],
             })
 
-        # Example dummy function hard coded to return the same weather
-        # In production, this could be your backend API or an external API
-        def get_current_weather(location, unit="fahrenheit"):
-            """Get the current weather in a given location"""
-            if "tokyo" in location.lower():
-                return json.dumps({"location": "Tokyo", "temperature": "10", "unit": unit})
-            elif "san francisco" in location.lower():
-                return json.dumps({"location": "San Francisco", "temperature": "72", "unit": unit})
-            elif "paris" in location.lower():
-                return json.dumps({"location": "Paris", "temperature": "22", "unit": unit})
-            else:
-                return json.dumps({"location": location, "temperature": "unknown"})
-            
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_current_weather",
-                    "description": "Get the current weather in a given location",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "location": {
-                                "type": "string",
-                                "description": "The city and state, e.g. San Francisco, CA",
-                            },
-                            "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
-                        },
-                        "required": ["location"],
-                    },
-                },
-            }
-        ]        
-
         start = datetime.now()
-        response = await LLM.client.chat.completions.create(
-            model="gpt-4-1106-preview",
-            messages=self.prompt_messages,
-            tools=tools,
-        )
+
         log.info('Time for LLM Response: %d', (datetime.now()-start).total_seconds())
 
-        response_message = response.choices[0].message
-        tool_calls = response_message.tool_calls
-        if tool_calls:
-            # Step 3: call the function
-            # Note: the JSON response may not always be valid; be sure to handle errors
-            available_functions = {
-                "get_current_weather": get_current_weather,
-            }  # only one function in this example, but you can have multiple
-            #messages.append(response_message)  # extend conversation with assistant's reply
-            # print('xx:', response_message)
-            # print('yy:', response_message.__dict__)
-            #await appendMessage(response_message)
-            self.prompt_messages.append(response_message)
-            # Step 4: send the info for each function call and function response to the model
-            for tool_call in tool_calls:
-                print("Calling tools")
-                function_name = tool_call.function.name
-                function_to_call = available_functions[function_name]
-                function_args = json.loads(tool_call.function.arguments)
-                function_response = function_to_call(
-                    location=function_args.get("location"),
-                    unit=function_args.get("unit"),
-                )
-                # if function_response:
-                await self.appendMessage(
-                    {
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": function_response,
-                        "text": f"Calling {function_name}"
-                    }                
-                )
-            start = datetime.now()
-            response = await LLM.client.chat.completions.create(
-                model="gpt-4-1106-preview",
-                messages=self.prompt_messages,
-            )  # get a new response from the model where it can see the function response
-            print('second call response:', response)
-            log.info('Time for llm tool processing: %d', (datetime.now()-start).total_seconds())
-            response_message = response.choices[0].message
+        # response_message = response.choices[0].message
+        # await self.appendMessage({
+        #     "role": "assistant",
+        #     "content": [
+        #         {
+        #             "type": "text",
+        #             "text": response_message.content
+        #         },
+        #     ],
+        # })
+
+        #llama
+        response_message = await llama3prompt(self.prompt_messages)
+        # response_message = response[0][0]['generated_text'][-1]['content']
+        #openai
+        # response = await LLM.client.chat.completions.create(
+        #     model="gpt-4-1106-preview",
+        #     messages=log,
+        # )
+        # response_message = response.choices[0].message.content
+
         await self.appendMessage({
             "role": "assistant",
             "content": [
                 {
                     "type": "text",
-                    "text": response_message.content
+                    "text": response_message
                 },
             ],
-        })
+        })        
 
+
+class OpenAI_LLM(LLM):
+    def __init__(self):
+        super().__init__()
+        self.client = AsyncOpenAI(api_key=openai_api_key)
+        # self.name = 'OpenAI'
+        # self.prompt_messages = [
+        #     {
+        #         "role": "system",
+        #         "content": [
+        #             {
+        #                 "type": "text",
+        #                 "text": f"Welcome to OpenAI's chat service.  The current date and time is {self.date_time_string}.  When reporting the time or date, speak succinctly.  When telling a joke, put the whole joke on the first line."
+        #             },
+        #         ],
+        #     },
+        # ]
+
+    # async def prompt(self,t):
+    #     await self.appendMessage({
+    #             "role": "user",
+    #             "content": [
+    #                 {
+    #                     "type": "text",
+    #                     "text": t
+    #                 },
+    #             ],
+    #         })
+
+    #     # Example dummy function hard coded to return the same weather
+    #     # In production, this could be your backend API or an external API
+    #     def get_current_weather(location, unit="fahrenheit"):
+    #         """Get the current weather in a given location"""
+    #         if "tokyo" in location.lower():
+    #             return json.dumps({"location": "Tokyo", "temperature": "10", "unit": unit})
+    #         elif "san francisco" in location.lower():
+    #             return json.dumps({"location": "San Francisco", "temperature": "72", "unit": unit})
+    #         elif "paris" in location.lower():
+    #             return json.dumps({"location": "Paris", "temperature": "22", "unit": unit})
+    #         else:
+    #             return json.dumps({"location": location, "temperature": "unknown"})
+            
+    #     tools = [
+    #         {
+    #             "type": "function",
+    #             "function": {
+    #                 "name": "get_current_weather",
+    #                 "description": "Get the current weather in a given location",
+    #                 "parameters": {
+    #                     "type": "object",
+    #                     "properties": {
+    #                         "location": {
+    #                             "type": "string",
+    #                             "description": "The city and state, e.g. San Francisco, CA",
+    #                         },
+    #                         "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
+    #                     },
+    #                     "required": ["location"],
+    #                 },
+    #             },
+    #         }
+    #     ]        
+
+    #     start = datetime.now()
+    #     response = await LLM.client.chat.completions.create(
+    #         model="gpt-4-1106-preview",
+    #         messages=self.prompt_messages,
+    #         tools=tools,
+    #     )
+    #     log.info('Time for LLM Response: %d', (datetime.now()-start).total_seconds())
+
+    #     response_message = response.choices[0].message
+    #     tool_calls = response_message.tool_calls
+    #     if tool_calls:
+    #         # Step 3: call the function
+    #         # Note: the JSON response may not always be valid; be sure to handle errors
+    #         available_functions = {
+    #             "get_current_weather": get_current_weather,
+    #         }  # only one function in this example, but you can have multiple
+    #         #messages.append(response_message)  # extend conversation with assistant's reply
+    #         # print('xx:', response_message)
+    #         # print('yy:', response_message.__dict__)
+    #         #await appendMessage(response_message)
+    #         self.prompt_messages.append(response_message)
+    #         # Step 4: send the info for each function call and function response to the model
+    #         for tool_call in tool_calls:
+    #             print("Calling tools")
+    #             function_name = tool_call.function.name
+    #             function_to_call = available_functions[function_name]
+    #             function_args = json.loads(tool_call.function.arguments)
+    #             function_response = function_to_call(
+    #                 location=function_args.get("location"),
+    #                 unit=function_args.get("unit"),
+    #             )
+    #             # if function_response:
+    #             await self.appendMessage(
+    #                 {
+    #                     "tool_call_id": tool_call.id,
+    #                     "role": "tool",
+    #                     "name": function_name,
+    #                     "content": function_response,
+    #                     "text": f"Calling {function_name}"
+    #                 }                
+    #             )
+    #         start = datetime.now()
+    #         response = await LLM.client.chat.completions.create(
+    #             model="gpt-4-1106-preview",
+    #             messages=self.prompt_messages,
+    #         )  # get a new response from the model where it can see the function response
+    #         print('second call response:', response)
+    #         log.info('Time for llm tool processing: %d', (datetime.now()-start).total_seconds())
+    #         response_message = response.choices[0].message
+    #     await self.appendMessage({
+    #         "role": "assistant",
+    #         "content": [
+    #             {
+    #                 "type": "text",
+    #                 "text": response_message.content
+    #             },
+    #         ],
+    #     })
