@@ -25,7 +25,9 @@
 - [ ] persistence of tts text and audio files for dataset
 - [ ] persistence of stt audio and text for dataset
 - [ ] Make video optional (dynamic from UI) 
-- [ ] some memory system.  How do I decouple interaction memories from agents?  
+- [ ] some memory system.  How do I decouple interaction memories from agents?
+- [ ] add stun support
+- [ ] agent should have access to system stats like was stun used etc.  
 - [X] persistence chat contexts json or sqlite? json files seems easier for now
 - [X] No context… New context…
 - [X] show selected context in UI
