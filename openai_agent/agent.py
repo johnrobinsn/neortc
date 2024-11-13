@@ -207,8 +207,10 @@ class Agent:
 
     nextContextId=0
 
-    def __init__(self):
+    def __init__(self,promptFunc,agentName):
         # self.sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
+        self.promptFunc = promptFunc
+        self.agentName = agentName
         self.sio = AsyncClient(ssl_verify=False)
         self.connected = False
 
@@ -222,12 +224,12 @@ class Agent:
     
     def loadAll(self):
         c = {}
-        dir = 'openai_chats'
+        dir = f'{self.agentName}_chats'
         try:
             files = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
             for index, file in enumerate(files, start=1):
                 print(f"{index}. {file}")
-                l = LLM()
+                l = LLM(self.promptFunc,self.agentName)
                 l.load(f'{dir}/{file}')
                 c[l.id] = l
                 async def onContextMetaDataChanged(m):
@@ -248,7 +250,7 @@ class Agent:
             #     cid = str(uuid.uuid4())
             #     Agent.nextContextId += 1            
             # l = LLM(cid)
-            l = LLM()
+            l = LLM(self.promptFunc,self.agentName)
             self.contexts[l.id] = l
             async def onContextMetaDataChanged(m):
                 # garbage collecting
@@ -316,6 +318,7 @@ class Agent:
             await self.sio.emit('watcher')
 
             displayName = config.get('agent_name','default')
+            displayName = f'{self.agentName}-{displayName}'
 
             # print('broadcasting:', displayName)
             await self.sio.emit("broadcaster", {'displayName':displayName});
@@ -394,9 +397,10 @@ class Agent:
 # else:
 #     loop = asyncio.get_event_loop()
 #     loop.create_task(start())
-
 import traceback
-if __name__ == "__main__":
+
+def startAgent(promptFunc,agentName):
+    global agent # TODO ick
     signal_server = f"{config.get('agent_signal_server','')}?agent={config.get('agent_name','default')}"
     if not signal_server:
         log.error('No signal server defined')
@@ -404,9 +408,13 @@ if __name__ == "__main__":
     else:
         log.info('Attempting connection to %s', signal_server)
     try:
-        agent = Agent()
+        agent = Agent(promptFunc,agentName)
         asyncio.run(agent.start(signal_server))
     except Exception as e:
         print(traceback.format_exc())
         print('Exception2 received', e)
+
+# import traceback
+# if __name__ == "__main__":
+
 

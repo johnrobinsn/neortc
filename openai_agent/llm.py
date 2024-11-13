@@ -24,10 +24,10 @@ import copy
 
 from openai import AsyncOpenAI
 
-from llama3async import startWorker, prompt as llama3prompt
+#from llama3async import startWorker, prompt as llama3prompt
+#from openaiasync import startWorker, prompt as llama3prompt
 
-
-startWorker()
+# startWorker()
 
 # from auth_openai import api_key
 from aconfig import config
@@ -92,7 +92,9 @@ class ILLM(ABC):
 class LLM(ILLM):
     client = AsyncOpenAI(api_key=openai_api_key)
     nameIndex = 0
-    def __init__(self):
+    def __init__(self,promptFunc,agentName):
+        self.agentName = agentName
+        self.promptFunc = promptFunc
         self.created = datetime.utcnow().isoformat() + "Z"
         self.id = str(uuid.uuid4())
         self.name = ''
@@ -126,8 +128,9 @@ class LLM(ILLM):
             'created':self.created,
             'log':self.prompt_messages,
         }
-        os.makedirs('openai_chats', exist_ok=True)
-        with open(f'openai_chats/{self.id}.json', 'w') as file:
+        dirName = f'{self.agentName}_chats'
+        os.makedirs(dirName, exist_ok=True)
+        with open(f'{dirName}/{self.id}.json', 'w') as file:
             file.write(json.dumps(j))
         self.persisted = True
 
@@ -211,7 +214,7 @@ class LLM(ILLM):
         # )
         # response_message = response.choices[0].message
         # return response_message.content  
-        return await llama3prompt(log)             
+        return await self.promptFunc(log)             
 
     async def prompt(self,t):
         await self.appendMessage({
@@ -240,7 +243,7 @@ class LLM(ILLM):
         # })
 
         #llama
-        response_message = await llama3prompt(self.prompt_messages)
+        response_message = await self.promptFunc(self.prompt_messages)
         # response_message = response[0][0]['generated_text'][-1]['content']
         #openai
         # response = await LLM.client.chat.completions.create(
