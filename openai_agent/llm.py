@@ -171,6 +171,10 @@ class LLM(ILLM):
         #asyncio.run(self.notifyMetaDataChanged())
         asyncio.get_event_loop().create_task(self.notifyMetaDataChanged())
 
+    async def bargeIn(self):
+        for l in self.listeners:
+            await l(None)    
+
     def addMetaDatalistener(self,l):
         if l:
             self.metaDataListeners.append(l)
