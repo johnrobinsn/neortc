@@ -1,11 +1,20 @@
 # TODO
 
 ## General
-- [ ] multiple live models; multiple agents; 
+- [ ] refactor, cleanup dead code, address all TODOs
+- [ ] PTT or Continuous Voice Mode in UI
+- [ ] record all audio clips
+- [ ] Test out recording while speaking
+- [ ] prod, stage, debug models and sticky filters in UI
+- [X] experiment with continuous mode listening UI.
+- [ ] Words like 'stop" are getting eaten with silence detection?
+- [X] streaming whisper... silence mode detection... barge in mode.
 - [ ] app not scrolling to bottom when agent is adding history.
-- [ ] start local model
+- [X] start local model
+- [ ] escape/commands without and without exiting modality (switch contexts)
+- [ ] dashboard showing all connected clients/peers and other statistics
 - [ ] RAG retrieval
-- [ ] notebook mode
+- [ ] notebook mode (sort of like a chat but don't prompt llm... have an escape/command mode)
 - [ ] think about incremental development model... how can I use... while building
 - [ ] make agent selection s
 - [ ] refactor/cleanup codeticky in UI (cookie?)
@@ -28,6 +37,9 @@
 - [ ] some memory system.  How do I decouple interaction memories from agents?
 - [ ] add stun support
 - [ ] agent should have access to system stats like was stun used etc.  
+- [X] multiple live models; multiple agents;
+- [X] Test out webrtc's echo cancellation.
+- [X] silence detection
 - [X] persistence chat contexts json or sqlite? json files seems easier for now
 - [X] No context… New context…
 - [X] show selected context in UI
