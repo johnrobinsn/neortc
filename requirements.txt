@@ -17,3 +17,4 @@ av
 opuslib
 soundfile
 Pillow
+torchaudio # silero
