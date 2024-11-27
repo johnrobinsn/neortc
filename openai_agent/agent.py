@@ -21,6 +21,9 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 import os
+import signal
+import traceback
+import json
 import asyncio
 from socketio import AsyncClient
 from aiortc import RTCSessionDescription, RTCPeerConnection, RTCConfiguration, RTCIceServer
@@ -46,7 +49,6 @@ if enableTTS:
 if enableLLM:
     from llm import LLM
 
-import json
 class Peer:
     peerIndex = 0
     def __init__(self, context, key):
@@ -76,7 +78,6 @@ class Peer:
         # context modified update connected peers
         async def onMessage(m):
             if m:
-                # print("**** Message: ", m)
                 if self.dataChannel and self.dataChannel.readyState == 'open':
                     msg = {'t':'appendLog','p':m}
                     self.dataChannel.send(json.dumps(msg))
@@ -130,7 +131,7 @@ class Peer:
             if self.context:
                 self.context.addMetaDatalistener(self.metaDataListener)            
             self.replaceLog()
-            # probably want to deter all listeners until channel is open
+            # TODO probably want to deter all listeners until channel is open
             @channel.on('open')
             async def on_open():
                 print("dc is open: ", channel.readyState)
@@ -193,8 +194,7 @@ class Peer:
 
         @self.pc.on("track")
         async def on_track(track):
-            # return
-            # guard to do this just once... 
+            # TODO guard to do this just once... 
             if (track.kind == 'audio'):
                 # pass
                 log.info('Audio track received')
@@ -212,9 +212,9 @@ class Agent:
     nextContextId=0
 
     def __init__(self,promptFunc,agentName):
-        # self.sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
         self.promptFunc = promptFunc
         self.agentName = agentName
+        # self.sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
         self.sio = AsyncClient(ssl_verify=False)
         self.connected = False
 
@@ -248,12 +248,6 @@ class Agent:
         if cid in self.contexts:
             return self.contexts[cid]
         else:
-            # if not cid:
-            #     # create a context Str
-            #     cid = f'context{Agent.nextContextId}'
-            #     cid = str(uuid.uuid4())
-            #     Agent.nextContextId += 1            
-            # l = LLM(cid)
             l = LLM(self.promptFunc,self.agentName)
             self.contexts[l.id] = l
             async def onContextMetaDataChanged(m):
@@ -266,22 +260,8 @@ class Agent:
             await self.updateContexts() # broadcast
             return l
 
-    # async def createPeer(self,sid,contextStr = ''):
-    #     print('Getting Peer for Client: ', sid)
-    #     if sid in self.peers:
-    #         return self.peers[sid]
-    #     else:
-    #         c = await self.getContext(contextStr)
-    #         p = Peer(c,sid)
-    #         p.setContext(c)
-    #         return p
-
     async def createPeer(self,sid,key,contextStr = ''):
         print('***** creating a new peer')
-        # if sid in self.peers:
-        #     p = self.peers[sid]
-        #     del self.peers[sid]
-        #     p.key = None
         c = await self.getContext(contextStr)
         p = Peer(c,key)
         p.setContext(c)
@@ -294,53 +274,40 @@ class Agent:
             print("ERROR: Unknown peer!")
 
     async def start(self,signal_server=SIGNAL_SERVER):
-        # print('signal server:', signal_server)
         log.warning('signal server: %s', signal_server)
         try:
             startWhisper()
             await self.sio.connect(signal_server, auth={'token':neortc_secret},transports=['websocket'])
             await self.sio.wait()
-
-        # except KeyboardInterrupt:
-        #     print('Exiting OpenAI Agent...')
         except asyncio.CancelledError:
-            print("Application is shutting down...")
-
-            # await self.sio.wait()
+            log.info("Application is shutting down...")
         except Exception as e:
+            log.info('Exception: %s', e) 
             print(traceback.format_exc())
-            print('Exception received', e) 
         finally:
             await self.sio.disconnect()
             await stopWhisper()
 
             peerlist = list(self.peers.values())
-            print('peerlist:', len(peerlist))
+            log.info('peerlist: %s', len(peerlist))
 
             for peer in peerlist:
-                print(f"Closing peer connection")
+                log.info(f"Closing peer connection")
                 try:
-                    #await peer.pc.close()
                     await peer.pc.close()
                 except Exception as e:
-                    print('blah:', e)
+                    log.info('Exception: %s', e)
 
-
-
- 
-
-        print('Exiting OpenAI Agent...')     
+        log.info('Exiting OpenAI Agent...')     
 
     async def updateContexts(self,id=''):
         metaData = [v.getMetaData() for i,(k,v) in enumerate(self.contexts.items())]
-        # metaData = []
         log.info("Updating contexts: %s", metaData)
-        log.info("contexts: %s", self.contexts)
-        # await self.sio.emit("getContextsResult", (id, list(self.contexts.keys()),))      
+        log.info("contexts: %s", self.contexts)    
         try:
             await self.sio.emit("getContextsResult", (id, metaData,))    
         except Exception as e:
-            print('Error in updateContexts:', e)
+            log.info('Exception: %s', e)
 
     def callbacks(self):
         @self.sio.event
@@ -353,7 +320,6 @@ class Agent:
             displayName = config.get('agent_name','default')
             displayName = f'{self.agentName}-{displayName}'
 
-            # print('broadcasting:', displayName)
             await self.sio.emit("broadcaster", {'displayName':displayName});
             self.connected = True
 
@@ -362,18 +328,12 @@ class Agent:
             log.info("agent:getContexts")
             await self.updateContexts(id=id)
 
-        # @self.sio.event
-        # async def captureAudio(sid,f):
-        #     peer = self.getPeer(sid)
-        #     await peer.stt.setCaptureAudio(f)
-
         @self.sio.event
         async def broadcaster():
             await self.sio.emit('watcher')
 
         @self.sio.event
         async def offer(id,message,contextStr,key):  # initiating message; id is watching
-            # global watch_sid
             print("**** requested context: ", contextStr)
             peer = await self.createPeer(id,key,contextStr)
             print("id:", id, " peer: ", peer)
@@ -392,7 +352,7 @@ class Agent:
                 try:
                     await peer.pc.setLocalDescription(await peer.pc.createAnswer())
                 except Exception as e:
-                    print(f"Task failed with error: {e}")
+                    log.info('Exception: %s',e)
 
                 local_description = peer.pc.localDescription
                 await self.sio.emit("answer", (id,{"sdp": local_description.sdp, "type": local_description.type},))
@@ -430,9 +390,7 @@ class Agent:
 # else:
 #     loop = asyncio.get_event_loop()
 #     loop.create_task(start())
-import traceback
 
-import signal
 def handle_sigint(loop):
     print('Caught signal: SIGINT')
     # for task in asyncio.all_tasks(loop):
@@ -446,7 +404,6 @@ def startAgent(promptFunc,agentName):
     # Register the signal handler
     loop.add_signal_handler(signal.SIGINT, handle_sigint, loop)
 
-
     signal_server = f"{config.get('agent_signal_server','')}?agent={config.get('agent_name','default')}"
     if not signal_server:
         log.error('No signal server defined')
@@ -455,37 +412,21 @@ def startAgent(promptFunc,agentName):
         log.info('Attempting connection to %s', signal_server)
     try:
         agent = Agent(promptFunc,agentName)
-        # asyncio.run(agent.start(signal_server))
         loop.run_until_complete(agent.start(signal_server))
-        print('Exiting OpenAI Agent2...')
-
-        # for task in asyncio.all_tasks(loop):
-        #     print('Cancelling task:', task)
-        #     task.cancel()
     except asyncio.CancelledError:
         print("Application is shutting down2...")
-    except KeyboardInterrupt:
-        print("KeyboardInterrupt received, shutting down...")        
+    # except KeyboardInterrupt:
+    #     print("KeyboardInterrupt received, shutting down...")        
     except Exception as e:
-        print(traceback.format_exc())
         print('Exception2 received', e)
+        print(traceback.format_exc())
     finally:
-        print('Exiting OpenAI Agent3...')
-
-
-        print('Exiting OpenAI Agent4...')
         tasks = asyncio.all_tasks(loop)
-        print('Exiting OpenAI Agent5...')
         for task in tasks:
             task.cancel()
-        print('Exiting OpenAI Agent6...')
         loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
-        print('Exiting OpenAI Agent7...')
         loop.close()
         print("Application exited cleanly")
-        # exit(0)
 
-# import traceback
-# if __name__ == "__main__":
 
 
