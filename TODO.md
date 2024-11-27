@@ -1,16 +1,27 @@
 # TODO
 
 ## General
-- [ ] refactor, cleanup dead code, address all TODOs
-- [ ] PTT or Continuous Voice Mode in UI
 - [ ] record all audio clips
+- [ ] Does audio recording need another thread?
+- [ ] refactor, cleanup dead code, address all TODOs
+- [ ] clean up UI for AVM (Advanced Voice Mode)
+- [ ] clean up UI for phone and tablet
+- [ ] clean up logging
+- [ ] PTT or Continuous Voice Mode in UI
+- [ ] aggregate speech segments to send to llm
+- [ ] Indicator that agent is connected; heartbeat
+- [ ] Client reconnecting
+- [ ] Agent reconnecting
+- [ ] Current peer reconnecting
+- [ ] Access logging
+- [ ] Access metering
+- [ ] Better security for agent.
+- [ ] if angle brackets are in the output they are not escaped properly in the log
+- [ ] When asked to stop or be quiet don't continue to talk
+- [ ] Be able to configure properties from the client kv pairs.
 - [ ] Test out recording while speaking
 - [ ] prod, stage, debug models and sticky filters in UI
-- [X] experiment with continuous mode listening UI.
 - [ ] Words like 'stop" are getting eaten with silence detection?
-- [X] streaming whisper... silence mode detection... barge in mode.
-- [ ] app not scrolling to bottom when agent is adding history.
-- [X] start local model
 - [ ] escape/commands without and without exiting modality (switch contexts)
 - [ ] dashboard showing all connected clients/peers and other statistics
 - [ ] RAG retrieval
@@ -36,7 +47,12 @@
 - [ ] Make video optional (dynamic from UI) 
 - [ ] some memory system.  How do I decouple interaction memories from agents?
 - [ ] add stun support
-- [ ] agent should have access to system stats like was stun used etc.  
+- [ ] agent should have access to system stats like was stun used etc.
+- [X] experiment with continuous mode listening UI.
+- [X] Sometimes bargein is being triggered given audio output.
+- [X] streaming whisper... silence mode detection... barge in mode.
+- [X] app not scrolling to bottom when agent is adding history.
+- [X] start local model
 - [X] multiple live models; multiple agents;
 - [X] Test out webrtc's echo cancellation.
 - [X] silence detection
