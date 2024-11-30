@@ -7,7 +7,8 @@ model_id = "meta-llama/Llama-3.2-11B-Vision-Instruct"
 
 model = MllamaForConditionalGeneration.from_pretrained(
     model_id,
-    torch_dtype=torch.bfloat16,
+    #torch_dtype=torch.bfloat16,
+    torch_dtype=torch.float16,
     device_map="auto",
 )
 processor = AutoProcessor.from_pretrained(model_id)
