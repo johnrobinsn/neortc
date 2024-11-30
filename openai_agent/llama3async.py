@@ -131,6 +131,9 @@ def startWorker():
 
 async def prompt(messages):
     # print('Prompting')
+    print('Prompting1:',messages)
+    messages = [{"role":r['role'],"content":r['content'][0]['text']} for r in messages]
+    print('Prompting2:',messages)
     r = (await w.send('prompt',(messages,)))[0][0]['generated_text'][-1]['content']
     print('llama response:', r)
     print('Type of r:', type(r))  # Debug statement to check the type of r
