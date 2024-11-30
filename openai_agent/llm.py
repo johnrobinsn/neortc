@@ -24,12 +24,6 @@ import copy
 
 from openai import AsyncOpenAI
 
-#from llama3async import startWorker, prompt as llama3prompt
-#from openaiasync import startWorker, prompt as llama3prompt
-
-# startWorker()
-
-# from auth_openai import api_key
 from aconfig import config
 import uuid
 
@@ -96,6 +90,7 @@ class LLM(ILLM):
         self.agentName = agentName
         self.promptFunc = promptFunc
         self.created = datetime.utcnow().isoformat() + "Z"
+        self.modified = datetime.utcnow().isoformat() + "Z"
         self.id = str(uuid.uuid4())
         self.name = ''
         self.summary = ''
@@ -111,7 +106,7 @@ class LLM(ILLM):
                 "content": [
                     {
                         "type": "text",
-                        "text": f"You are a helpful AI assistant.  The current date and time is {self.date_time_string}.  When reporting the time or date, speak succinctly.  When telling a joke, put the whole joke on the first line."
+                        "text": f"You are a helpful AI assistant.  The current date and time is {self.date_time_string}.  When reporting the time or date, speak succinctly.  When telling a joke, put the whole joke on the first line. If I ask you to stop simply respond with the word \"OK\"."
                     },
                 ],
             },
@@ -126,6 +121,7 @@ class LLM(ILLM):
             'name':self.name,
             'summary':self.summary,
             'created':self.created,
+            'modified':self.modified,
             'log':self.prompt_messages,
         }
         dirName = f'{self.agentName}_chats'
@@ -148,7 +144,7 @@ class LLM(ILLM):
         display = self.name
         if not display: display = self.summary
         if not display: display = 'Untitled'
-        return {'id':self.id,'display':display,'summary':self.summary,'name':self.name,'created':self.created}
+        return {'id':self.id,'display':display,'summary':self.summary,'name':self.name,'created':self.created,'modified':self.modified}
     
     async def notifyMetaDataChanged(self):
         for l in self.metaDataListeners:
@@ -186,6 +182,7 @@ class LLM(ILLM):
 
     # user,assistant,system
     async def appendMessage(self,m):
+        self.modified = datetime.utcnow().isoformat() + "Z"
         self.prompt_messages.append(m)
         for l in self.listeners:
             await l(m if isinstance(m, dict) else m.__dict__)
