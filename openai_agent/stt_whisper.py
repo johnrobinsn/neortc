@@ -132,7 +132,7 @@ class STT:
                 # print('channels:', frame.layout.channels)
                 self.audio.append(f)
 
-                if len(self.audio) >= 8: #16:
+                if len(self.audio) >= 8: # 8=>320ms, 16=>640ms
                     buffer = np.concatenate(self.audio, axis=1)
                     # print('buffer:', buffer.shape, buffer.dtype, ' ', self.sample_rate)
                     # processed_buffer = await self.processor.process_audio(buffer, self.sample_rate)
@@ -192,6 +192,7 @@ class Worker:
             asr = pipeline("automatic-speech-recognition",model="openai/whisper-tiny",device='cpu')
             print('Starting Whisper',asr)
             buffers = {} # TODO should this be a class variable?
+            runs = {}
             bargeIn = False
             silenceCount = 0
             bargeInCount = 0
@@ -199,15 +200,17 @@ class Worker:
             def process(args):
                 # nonlocal bargeIn
                 nonlocal silenceCount
-                nonlocal bargeInCount
+                # nonlocal bargeInCount
                 buffer, stt = args
                 if stt not in buffers:
                     buffers[stt] = []
-                # print('buffer:', buffer.shape, buffer.dtype)
-                buffer = buffer.mean(axis=0)
+                if stt not in runs:
+                    runs[stt] = []
+                print('buffer:', buffer.shape, buffer.dtype, stt)
+                buffer = buffer.mean(axis=0) #warning implicit float conversion
                 # buffer = buffer[::self.num_channels]
                 buffer = buffer[::2]
-                # print('buffer mono:', buffer.shape, buffer.dtype)
+                print('buffer mono:', buffer.shape, buffer.dtype)
                 # ratio = self.whisper_sample_rate / self.sample_rate
                 # ratio = 16000 / 48000
                 #TODO this is a hack to get the ratio right
@@ -223,16 +226,16 @@ class Worker:
                 float_buffer2 = float_buffer2.reshape(-1,512)
                 # print('float_buffer2a:', float_buffer2.shape, float_buffer2.dtype)
                 p = model(torch.from_numpy(float_buffer2),16000)
-                # print('VAD:', p.shape, p)
+                print('VAD:', p.shape, p)
                 p = torch.all(p<0.25)
-                # print('VAD2:', p)
+                print('VAD2:', p)
 
 
                 # Silence detection
                 rms = np.sqrt(np.mean(buffer**2))
                 # silence_threshold = 600  # Adjust this threshold as needed
-                silence_threshold = 50  # Adjust this threshold as needed
-                # print('rms:', rms)
+                silence_threshold = 5  # Adjust this threshold as needed
+                print('rms:', rms)
 
                 is_silent = rms < silence_threshold
                 # is_silent = False
@@ -240,22 +243,21 @@ class Worker:
                 if not is_silent:
                     is_silent = p # noisy but no voice detected
 
-                if is_silent:
-                    bargeInCount = 0
-                    # buffers[stt] = []
-                    silenceCount = silenceCount + 1
-                else:
-                    bargeInCount = bargeInCount + 1
-                    # if silenceCount > 0:
-                    #     buffers[stt] = []
+                if not is_silent:
                     silenceCount = 0
+                    runs[stt].append(buffer)
+                else:
+                    silenceCount = silenceCount + 1
+                    if len(runs[stt]) >= 2:
+                        buffers[stt].extend(runs[stt])
+                        # print('Buffering audio', len(buffers[stt]))
+                        # if bargeInCount == 1: # Only send bargeIn once
+                        print('BargeIn detected')
+                        outQ.put(('process',None,stt))                        
+                    runs[stt] = []
 
-                if silenceCount >= 2:
+                if silenceCount >= 4 and len(buffers[stt]) >= 2:
                     # print('Silence detected, skipping processing')
-                    if len(buffers[stt]) < 2:
-                        buffers[stt] = []
-                        # bargeIn = False
-                        return
                     # print('Processing buffered audio', len(Worker.bbuffer))
                     buffer = np.concatenate(buffers[stt], axis=0)
                     print('buffer2:', buffer.shape, buffer.dtype)
@@ -275,7 +277,12 @@ class Worker:
 
                     # buffer.astype(np.int16).tofile('foo.pcm')
 
-                    filename = filename + '.mp3'
+                    # create directory
+                    import os
+                    if not os.path.exists('recordings'):
+                        os.makedirs('recordings')
+
+                    filename = f'recordings/{filename}.mp3'
                     audio_segment = AudioSegment(
                         buffer.tobytes(), 
                         frame_rate=16000,
@@ -290,15 +297,16 @@ class Worker:
                     print('stt:', t)
                     outQ.put(('process',t,stt))
                     buffers[stt] = []
-                    bargeIn = False
+                    # bargeIn = False
                     # if stt.llm:
                     #     asyncio.get_event_loop().create_task(stt.llm.prompt(t['text']))
                     
-                else:
-                    buffers[stt].append(buffer)
-                    if bargeInCount == 2: # Only send bargeIn once
-                        print('BargeIn detected')
-                        outQ.put(('process',None,stt))
+                # else:
+                #     buffers[stt].append(buffer)
+                #     print('Buffering audio', len(buffers[stt]))
+                #     if bargeInCount == 1: # Only send bargeIn once
+                #         print('BargeIn detected')
+                #         outQ.put(('process',None,stt))
 
             while True:
                 command, args = inQ.get()
