@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Application</title>
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    .user {color:aquamarine;}
+    .assistant {color: lightblue;}
+    .tool {color: yellow;}
+    .system {color: red;}
+    pre { 
+      white-space: pre-wrap; 
+      color: inherit; /* Override Bootstrap color */
+      /* margin: inherit; */
+      line-height: initial;
+    }
+    body, html {
+      height: 100%;
+      margin: 0;
+      background-color: black; /* Set background color to black */
+    }
+    button {
+      outline:none;
+    }
+    button:focus {
+      outline:none; /* Remove outline on focus */
+    }
+    .btn:focus {
+      outline:initial; /* Remove outline on focus */
+    }
+    .chat-container {
+      height: calc(100% - 50px); /* Adjust height to account for header */
+      display: flex;
+      flex-direction: row;
+    }
+    .chat-header {
+      background-color: #1f1f1f;
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      height: 50px; /* Fixed height for header */
+    }
+    .chat-panel {
+      background-color: #2c2c2c;
+      color: #e0e0e0;
+      overflow-y: auto;
+    }
+    .chat-history {
+      background-color: #1f1f1f;
+      color: #e0e0e0;
+      overflow-y: auto;
+      flex-grow: 1;
+    }
+    .hamburger {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      outline: none;
+    }
+    .hamburger:focus {
+      outline: none; /* Remove outline on focus */
+    }
+    @media (max-width: 768px) {
+      .chat-container {
+        flex-direction: column;
+      }
+      .chat-panel {
+        display: none; /* Hide panel by default on small screens */
+        width: 100%;
+        height: auto;
+        position: absolute;
+        top: 50px; /* Position below the header */
+        z-index: 1;
+      }
+      .chat-history {
+        width: 100%;
+        height: auto;
+      }
+      .hamburger {
+        display: block; /* Show hamburger on small screens */
+      }
+    }
+    @media (min-width: 769px) {
+      .hamburger {
+        display: none; /* Hide hamburger on large screens */
+      }
+      .chat-panel {
+        display: block !important; /* Show panel by default on large screens */
+        width: 25%;
+        height: 100%;
+        position: relative;
+        top: 0;
+        z-index: auto;
+      }
+      .chat-history {
+        width: 75%;
+        height: 100%;
+      }
+    }
+
+  </style>
+</head>
+<body>
+  <div class="chat-header">
+    <button class="hamburger" type="button" data-target="#chatPanel" aria-expanded="false" aria-controls="chatPanel" onclick="togglePanel()">
+      &#9776;
+    </button>
+    <h4 style="margin: 0; text-align: left; width: 100%;">Zero</h4>
+    <div class="chat-status" style="display: flex; justify-content: flex-end; align-items: center; padding: 10px;">
+      <span class="led-indicator" id="led-indicator" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #e0e0e0; background-color: red; margin-right: 10px;"></span>
+      <span id="status-text">Off</span>
+      </div>
+  </div>
+  <div class="container-fluid chat-container" style="padding-left: 0; padding-right: 0;">
+    <div class="chat-panel" id="chatPanel">
+      <!-- Panel content here -->
+      <div id="watching"></div>
+      <div id="peers">No Peers</div>
+      <hr>
+      <div class="search-container" style="padding: 10px;">
+        <input type="text" class="form-control" id="searchInput" placeholder="Search...">
+        <button class="btn btn-primary" type="button" id="searchButton" onclick="performSearch()">Search</button>
+      </div>
+      <script>
+        function performSearch() {
+          const query = document.getElementById('searchInput').value;
+          // Implement search functionality here
+          console.log('Searching for:', query);
+        }
+      </script>
+      <div id="contexts">some contexts for you</div>
+      <hr>
+      <br/>
+      <div>version:<span id="version"></span></div>
+
+      <div>status:<span id='sockStatus'>disconnected</span></div>
+      <div>peerStatus:<span id="peerStatus">peerStatus</span></div>
+      <!-- <div style="visibility: collapse;"> -->
+      <section class="select">
+        <label for="audioSource">Audio source: </label>
+        <select id="audioSource"></select>
+      </section>
+  
+      <section class="select">
+        <label for="videoSource">Video source: </label>
+        <select id="videoSource"></select>
+      </section>        
+
+      <video id="local_video" playsinline autoplay muted></video> 
+
+      <div><button id="stopAudio">Stop Audio</button></div>
+
+      <label>
+        <input type="checkbox" id="toggleCheckbox" onclick="setAudioEnabled(this.checked)"> Enable Audio
+    </label>
+    <audio id="remote-audio" autoplay playsinline></audio>
+    <!-- <button id="voiceBtn"><i class="fa-solid fa-first-order"></i></button> -->
+    <div><button id="logoutButton" onclick="logOut()">Logout</button></div>
+    </div>
+    <div class="chat-history" style="display: flex; flex-direction: column;">
+      <!-- Chat history content here -->
+      <div class="chat-log" id="chat-log" style="flex-grow: 1; overflow-y: auto; padding:5px;">
+      <!-- Chat log content here -->
+      </div>
+      <div class="chat-input" style="display: flex; align-items: center; padding: 10px;">
+      <textarea class="form-control" id="chatInput" placeholder="Type a message..." style="flex-grow: 1; resize: none; overflow: auto; margin-right: 5px;" rows="1" oninput="autoGrow(this)"></textarea>
+      <script>
+        function autoGrow(element) {
+
+          if (element.value === '') {
+            element.rows = 1;
+          }
+          if (element.scrollHeight > element.clientHeight && element.rows < 4) {
+            element.rows += 1;
+          }
+          element.style.height = 'auto';
+          // if (element.rows < 4) element.style.height = (element.scrollHeight) + 'px';
+          element.overflowy = 'hidden';
+          element.overflowy = 'auto';
+        }
+      </script>
+      <button class="btn btn-primary" type="button" id="sendButton"><i class="fa-solid fa-microphone"></i></button>
+      <button class="btn btn-primary" type="button" id="voiceButton"><i class="fa-brands fa-codepen"></i></button>
+      </div>
+    </div>
+  </div>
+  <script>
+    function togglePanel() {
+      const chatPanel = document.getElementById('chatPanel');
+      if (chatPanel.style.display === 'block') {
+        chatPanel.style.display = 'none';
+      } else {
+        chatPanel.style.display = 'block';
+        chatPanel.style.height = 'calc(100%)'; // Set height to fill the remaining space below the header
+      }
+    }
+
+  function deleteCookie(name) {
+    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    }
+
+  function logOut() {
+    deleteCookie('session_token');
+    window.location.href = '/';
+  }
+  </script>
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script src="/socket.io.js"></script>
+  <script src="neortc.js"></script>
+  <script src="voice.js"></script>
+</body>
+</html>

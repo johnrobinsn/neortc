@@ -99,10 +99,20 @@ body {
 #send-div {
   display: flex;
   /* padding: 10px; */
-  margin: 4px 8px 14px 8px;
+  margin: 4px 20px 14px 8px;
   max-height: 200px; /* Prevents textarea from growing too large */
   /* overflow-y: auto;   */
   flex-shrink: 0;
+  width: 100%;
+}
+
+#send-div2 {
+  display: flex;
+  /* padding: 10px; */
+  /* margin: 0px; */
+  /* overflow-y: auto;   */
+  flex-shrink: 0;
+  flex: 1;
 }
 
 #sendTxt:focus {outline: none;}
@@ -134,6 +144,10 @@ button {
   cursor: pointer;
   border-radius: 8px;
   user-select: none;
+}
+
+#voiceBtn {
+  margin: 0px 20px 0px 10px
 }
 
 .user {color:aquamarine;}

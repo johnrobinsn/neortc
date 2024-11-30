@@ -21,6 +21,23 @@ log = logging.getLogger(__name__)
 
 from config import config
 neortc_secret = config.get('neortc_secret')
+neortc_accounts = config.get('neortc_accounts',[])
+neortc_accounts = {item['email']: item for item in neortc_accounts}
+
+print('neortc_accounts:',neortc_accounts)
+# Create a dictionary from an array of objects with one of the fields as a key
+def create_dict_from_array(array, key_field):
+    return 
+
+# Example usage
+example_array = [
+    {'id': 1, 'name': 'Alice'},
+    {'id': 2, 'name': 'Bob'},
+    {'id': 3, 'name': 'Charlie'}
+]
+
+example_dict = create_dict_from_array(example_array, 'id')
+print(example_dict)
 print('neortc_secret:',neortc_secret)
 
 from os import kill, getpid
@@ -61,6 +78,7 @@ async def error(e):
     log.error('socket io error:', e)
 
 import urllib
+import secrets
 
 @sio.event
 async def connect(sid,env,auth):
@@ -70,6 +88,7 @@ async def connect(sid,env,auth):
 
     print("in bound connection, ", agentname)
     token = auth.get('token','')
+    print("socket token:",token,neortc_secret)
     if neortc_secret and token != neortc_secret:
         print("auth failed; disonnecting")
         return False
@@ -128,13 +147,54 @@ async def disconnect(sid):
 
 routes = web.RouteTableDef()
 
+# @routes.get('/')
+# async def handle_get(request):
+#     token = request.query.get('token', '')
+#     if neortc_secret and token != neortc_secret:
+#         return web.Response(text=".")
+#     else:
+#         return web.FileResponse('./static/index.html')
+
 @routes.get('/')
 async def handle_get(request):
-    token = request.query.get('token', '')
-    if neortc_secret and token != neortc_secret:
-        return web.Response(text=".")
-    else:
+    token = request.cookies.get('session_token')
+    print('token:',token)
+    if token != SESSION_TOKEN:
+        # return web.Response(text="Unauthorized", status=401)
         return web.FileResponse('./static/index.html')
+    else:
+        return web.HTTPFound('/neortc')
+
+    
+# Hardcoded credentials
+# VALID_EMAIL = "johnrobinsn@gmail.com"
+# VALID_PASSWORD = "n304J0hn!"
+SESSION_TOKEN = neortc_secret #secrets.token_urlsafe(32) # TODO needs to be fixed... hardcoded
+
+@routes.post('/auth')
+async def handle_auth(request):
+    print('auth')
+    data = await request.post()
+    email = data.get('email')
+    password = data.get('password')
+
+    VALID_EMAIL = neortc_accounts.get(email, {}).get('email','')
+    VALID_PASSWORD = neortc_accounts.get(email, {}).get('password','')
+    
+    if email == VALID_EMAIL and password == VALID_PASSWORD:
+        response = web.HTTPFound('/neortc')
+        response.set_cookie('session_token', SESSION_TOKEN, max_age=3600*24*365)
+        return response
+    else:
+        return web.Response(text="Invalid credentials", status=401)
+
+@routes.get('/neortc')
+async def handle_get(request):
+    token = request.cookies.get('session_token')
+    if token != SESSION_TOKEN:
+        return web.Response(text="Unauthorized", status=401)
+    else:
+        return web.FileResponse('./static/neortc.html')
 
 routes.static('/', './static', show_index=False)
 

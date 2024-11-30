@@ -1,75 +1,69 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Multimodal Chat</title>
-    <meta charset="UTF-8" />
-    <link href="/styles.css" rel="stylesheet" />
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Page</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  </head>
-  <body>
-    <div id="panelcontainer">
-      <img id="menubutton" src='bars-solid.svg'><br/>
-      <div id="panel">
-        
-        <div id="watching"></div>
-        <div id="peers">No Peers</div>
-        <hr>
-        <div id="contexts">some contexts for you</div>
-        <hr>
-        <br/>
-        <div>version:<span id="version"></span></div>
-
-        <div>status:<span id='sockStatus'>disconnected</span></div>
-        <div>peerStatus:<span id="peerStatus">peerStatus</span></div>
-        <!-- <div style="visibility: collapse;"> -->
-        <section class="select">
-          <label for="audioSource">Audio source: </label>
-          <select id="audioSource"></select>
-        </section>
-    
-        <section class="select">
-          <label for="videoSource">Video source: </label>
-          <select id="videoSource"></select>
-        </section>        
-
-        <video id="local_video" playsinline autoplay muted></video> 
-
-        <div><button id="stopAudio">Stop Audio</button></div>
-
-        <label>
-          <input type="checkbox" id="toggleCheckbox" onclick="setAudioEnabled(this.checked)"> Enable Audio
-      </label>
-      </div>
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        body {
+            background-color: #343a40;
+            color: #ffffff;
+        }
+        .form-control {
+            background-color: #495057;
+            color: #ffffff;
+            border: 1px solid #ced4da;
+        }
+        .form-control::placeholder {
+            color: #ced4da;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <h2 class="text-center mt-5">Login</h2>
+                <form action="/auth" method="post">
+                    <div class="form-group">
+                        <label for="email">Email address</label>
+                        <input type="email" class="form-control" id="email" name="email" placeholder="Enter email">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="password" name="password" placeholder="Password">
+                            <div class="input-group-append">
+                                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Login</button>
+                </form>
+            </div>
+        </div>
     </div>
-
-    <audio id="remote-audio" autoplay playsinline></audio>
-
-    <div class="chat-container">
-    <div id="chat-log"></div>
-
-    <div id="send-div">
-      <textarea id="sendTxt" class="user"></textarea>
-      <button id="sendBtn"><i class="fa-solid fa-microphone"></i></button>
-    </div>
-  </div>
-   
-    <script src="/socket.io.js"></script>
-    <script src="/index.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script>
-      $(document).ready((e)=>{
-        console.log('in onload')
-        $('#menubutton').click(function(){
-          console.log('clicked')
-          if ( $('#panel').css('display') == 'none' )
-            $('#panel').css('display','block');
-          else
-            $('#panel').css('display','none');
-        })
-      })
+        document.getElementById('togglePassword').addEventListener('click', function () {
+          const passwordField = document.getElementById('password');
+          const passwordIcon = document.getElementById('togglePasswordIcon');
+          const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+          passwordField.setAttribute('type', type);
+          passwordIcon.classList.toggle('fa-eye');
+          passwordIcon.classList.toggle('fa-eye-slash');
+        });
     </script>    
-  </body>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
 </html>
