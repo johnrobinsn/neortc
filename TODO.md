@@ -1,6 +1,32 @@
 # TODO
 
 ## General
+- [ ] agent id is not stable across restarts - make sticky work
+- [ ] context list not refreshed when disconnected
+- [ ] refactor/cleanup client code
+- [ ] Some distractor when agent is thinking
+- [ ] filter out system prompt by default
+- [ ] llama generation very slow
+- [ ] can I stream output from the llm to the client?
+- [ ] llama agent isn't exiting properly with crtl-c
+- [ ] add ability to delete context from UI
+- [ ] add ability to edit past input from UI (fork or edit)
+- [ ] add ability to share context from UI
+- [ ] add ability to regenerate content generation back in time
+- [ ] add ability to rename context from UI
+- [X] Add modified to context metadata
+- [ ] exception handling if config file has errors
+- [X] sort by modified date
+- [ ] Better UI handling when not connected to agent
+- [X] logout button
+- [ ] better icon/splash screen
+- [ ] search chat list
+- [ ] better auth if no session token on any screen redirect to auth
+- [ ] can I auto connect to agent?
+- [ ] switch back to llama by default
+- [ ] try to make a notebook mode
+- [ ] play around with rag retrieval
+- [ ] Could perhaps use a generation id to better cancel future queued audio tts given stt input
 - [ ] record all audio clips
 - [ ] Does audio recording need another thread?
 - [ ] refactor, cleanup dead code, address all TODOs
@@ -10,7 +36,7 @@
 - [ ] PTT or Continuous Voice Mode in UI
 - [ ] aggregate speech segments to send to llm
 - [ ] Indicator that agent is connected; heartbeat
-- [ ] Client reconnecting
+- [X] Client reconnecting
 - [ ] Agent reconnecting
 - [ ] Current peer reconnecting
 - [ ] Access logging
@@ -21,7 +47,7 @@
 - [ ] Be able to configure properties from the client kv pairs.
 - [ ] Test out recording while speaking
 - [ ] prod, stage, debug models and sticky filters in UI
-- [ ] Words like 'stop" are getting eaten with silence detection?
+- [X] Words like 'stop" are getting eaten with silence detection?
 - [ ] escape/commands without and without exiting modality (switch contexts)
 - [ ] dashboard showing all connected clients/peers and other statistics
 - [ ] RAG retrieval
@@ -48,7 +74,13 @@
 - [ ] some memory system.  How do I decouple interaction memories from agents?
 - [ ] add stun support
 - [ ] agent should have access to system stats like was stun used etc.
-- [X] experiment with continuous mode listening UI.
+- [ ] background voice mode on android (will I need a service?)
+- [X] move status to top
+- [X] handle peer connection state in status
+- [X] move recordings into a directory 
+- [X] Some auth so that I can get rid of the token and make the home page app work
+- [X] when adding page to homescreen can I hide urlbar?
+- [X] auto dismiss panel when making a selection- [X] experiment with continuous mode listening UI.
 - [X] Sometimes bargein is being triggered given audio output.
 - [X] streaming whisper... silence mode detection... barge in mode.
 - [X] app not scrolling to bottom when agent is adding history.
@@ -255,5 +287,4 @@ XTurn on amazon
 XAuthl
 AWS autostart python signal server
 turn server with auth
-
-Think about modalities… taking notes/research a modality… 
+Think about modalities… taking notes/research a modality…
