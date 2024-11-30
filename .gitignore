@@ -8,3 +8,4 @@ todo.md
 api_key_openai.py
 openai_agent/openai_chats
 openai_agent/llama_chats
+openai_agent/recordings
