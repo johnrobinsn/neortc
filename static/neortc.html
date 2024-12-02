@@ -12,6 +12,8 @@
     .assistant {color: lightblue;}
     .tool {color: yellow;}
     .system {color: red;}
+
+
     pre { 
       white-space: pre-wrap; 
       color: inherit; /* Override Bootstrap color */
@@ -98,12 +100,26 @@
         position: relative;
         top: 0;
         z-index: auto;
+        padding: 5px;
       }
       .chat-history {
         width: 75%;
         height: 100%;
       }
     }
+
+    .selected {
+      background-color: #1f1f1f; color: white;
+      a {color: white;}
+    }
+
+
+    li {
+      line-height: 1.5;
+      margin-bottom: 5px;
+      a { color: #e0e0e0}
+    }
+
 
   </style>
 </head>
@@ -112,7 +128,7 @@
     <button class="hamburger" type="button" data-target="#chatPanel" aria-expanded="false" aria-controls="chatPanel" onclick="togglePanel()">
       &#9776;
     </button>
-    <h4 style="margin: 0; text-align: left; width: 100%;">Zero</h4>
+    <h4 id="header" style="margin: 0; text-align: left; width: 100%;">Zero</h4>
     <div class="chat-status" style="display: flex; justify-content: flex-end; align-items: center; padding: 10px;">
       <span class="led-indicator" id="led-indicator" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #e0e0e0; background-color: red; margin-right: 10px;"></span>
       <span id="status-text">Off</span>
@@ -122,11 +138,12 @@
     <div class="chat-panel" id="chatPanel">
       <!-- Panel content here -->
       <div id="watching"></div>
+      <div>Agents</div>
       <div id="peers">No Peers</div>
-      <hr>
+      <div>Chats</div>
       <div class="search-container" style="padding: 10px;">
         <input type="text" class="form-control" id="searchInput" placeholder="Search...">
-        <button class="btn btn-primary" type="button" id="searchButton" onclick="performSearch()">Search</button>
+        <!-- <button class="btn btn-primary" type="button" id="searchButton" onclick="performSearch()">Search</button> -->
       </div>
       <script>
         function performSearch() {
@@ -136,35 +153,92 @@
         }
       </script>
       <div id="contexts">some contexts for you</div>
-      <hr>
-      <br/>
-      <div>version:<span id="version"></span></div>
 
-      <div>status:<span id='sockStatus'>disconnected</span></div>
-      <div>peerStatus:<span id="peerStatus">peerStatus</span></div>
-      <!-- <div style="visibility: collapse;"> -->
-      <section class="select">
-        <label for="audioSource">Audio source: </label>
-        <select id="audioSource"></select>
-      </section>
-  
-      <section class="select">
-        <label for="videoSource">Video source: </label>
-        <select id="videoSource"></select>
-      </section>        
+      <div><button id="logoutButton" onclick="logOut()">Logout</button></div>
+      <div>
+        <button id="twistyButton" onclick="toggleTwisty()">...</button>
+        <div id="twistyContent" style="display: none;">
+          <div>version:<span id="version"></span></div>
 
-      <video id="local_video" playsinline autoplay muted></video> 
+          <div>status:<span id='sockStatus'>disconnected</span></div>
+          <div>peerStatus:<span id="peerStatus">peerStatus</span></div>
+          <!-- <div style="visibility: collapse;"> -->
+          <section class="select">
+            <label for="audioSource">Audio source: </label>
+            <select id="audioSource"></select>
+          </section>
+      
+          <section class="select">
+            <label for="videoSource">Video source: </label>
+            <select id="videoSource"></select>
+          </section>        
+    
+          <video id="local_video" playsinline autoplay muted></video> 
+    
+          <div><button id="stopAudio">Stop Audio</button></div>
+    
+          <label>
+            <input type="checkbox" id="toggleCheckbox" onclick="setAudioEnabled(this.checked)"> Enable Audio
+        </label>
+        <audio id="remote-audio" autoplay playsinline></audio>
+        </div>
+      </div>
+      <script>
+        function setCookie(name, value, days) {
+          const d = new Date();
+          d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+          const expires = "expires=" + d.toUTCString();
+          document.cookie = name + "=" + value + ";" + expires + ";path=/";
+        }
 
-      <div><button id="stopAudio">Stop Audio</button></div>
+        function getCookie(name) {
+          const cname = name + "=";
+          const decodedCookie = decodeURIComponent(document.cookie);
+          const ca = decodedCookie.split(';');
+          for (let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) == ' ') {
+              c = c.substring(1);
+            }
+            if (c.indexOf(cname) == 0) {
+              return c.substring(cname.length, c.length);
+            }
+          }
+          return "";
+        }
 
-      <label>
-        <input type="checkbox" id="toggleCheckbox" onclick="setAudioEnabled(this.checked)"> Enable Audio
-    </label>
-    <audio id="remote-audio" autoplay playsinline></audio>
+        function toggleTwisty() {
+          const twistyContent = document.getElementById('twistyContent');
+          const twistyButton = document.getElementById('twistyButton');
+          if (twistyContent.style.display === 'none') {
+            twistyContent.style.display = 'block';
+            twistyButton.textContent = 'Show Less';
+            setCookie('twistyState', 'shown', 7);
+          } else {
+            twistyContent.style.display = 'none';
+            twistyButton.textContent = '...';
+            setCookie('twistyState', 'hidden', 7);
+          }
+        }
+
+        // window.onload = function() {
+        //   const twistyState = getCookie('twistyState');
+        //   const twistyContent = document.getElementById('twistyContent');
+        //   const twistyButton = document.getElementById('twistyButton');
+        //   if (twistyState === 'shown') {
+        //     twistyContent.style.display = 'block';
+        //     twistyButton.textContent = 'Show Less';
+        //   } else {
+        //     twistyContent.style.display = 'none';
+        //     twistyButton.textContent = '...';
+        //   }
+        // }
+      </script>
+
     <!-- <button id="voiceBtn"><i class="fa-solid fa-first-order"></i></button> -->
-    <div><button id="logoutButton" onclick="logOut()">Logout</button></div>
     </div>
     <div class="chat-history" style="display: flex; flex-direction: column;">
+      <h5 id="chat-header">Blah Blah</h5>
       <!-- Chat history content here -->
       <div class="chat-log" id="chat-log" style="flex-grow: 1; overflow-y: auto; padding:5px;">
       <!-- Chat log content here -->
@@ -216,6 +290,5 @@
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
   <script src="/socket.io.js"></script>
   <script src="neortc.js"></script>
-  <script src="voice.js"></script>
 </body>
 </html>

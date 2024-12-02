@@ -33,7 +33,6 @@ const config = {
   ]
 };
 
-// const urlParams = new URLSearchParams(window.location.search);
 const peersDiv = document.querySelector("#peers")
 const contextsDiv = document.querySelector("#contexts")
 const remoteAudio = document.querySelector('#remote-audio')
@@ -46,33 +45,40 @@ const stopAudio = document.querySelector('#stopAudio')
 const voiceBtn = document.querySelector('#voiceButton')
 const ledIndicator = document.querySelector('#led-indicator')
 const statusText = document.querySelector('#status-text')
+const header = document.querySelector('#header')
+const chatheader = document.querySelector('#chat-header')
 
-function getCookie(name) {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop().split(';').shift();
-  else return null;
-}
+// function getCookie(name) {
+//   const value = `; ${document.cookie}`;
+//   const parts = value.split(`; ${name}=`);
+//   if (parts.length === 2) return parts.pop().split(';').shift();
+//   else return null;
+// }
 
-// stickyAgent = ''
-// const stickyAgent = getCookie('stickyAgent');
-
-// function setAgent(id) {
-//   // stickyAgent = id;
-//   agentName = peers[id].displayName
-//   document.cookie = `stickyAgent=${agentName}; path=/;`;
-//   console.log('setAgent:', id)
-//   window.rtc.rtcConnect(id)
+// function setCookie(name, value, days) {
+//   let expires = "";
+//   if (days) {
+//     const date = new Date();
+//     date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+//     expires = `; expires=${date.toUTCString()}`;
+//   }
+//   document.cookie = `${name}=${value || ""}${expires}; path=/`;
 // }
 
 function setAgent(name) {
-  if (window.rtc.targetId == name) return; // already set
-  // stickyAgent = id;
+  document.title = `Zero: ${name}`;
+  header.innerHTML = `Zero: ${name}`;
+  setCookie('stickyAgent',name,365)
   peers = window.rtc.peers
   id = Object.keys(peers).find(k=>peers[k].displayName == name)
-  document.cookie = `stickyAgent=${name}; path=/;`;
-  console.log('setAgent:', id)
-  window.rtc.rtcConnect(id)
+  if (id)
+    window.rtc.socket.emit("getContexts", id) // TODO this should not be here... 
+  if (id && id != window.rtc.rtcTargetId) {
+    contexts = []
+    refreshPeers()
+    console.log('setAgent:', id)
+    window.rtc.rtcConnect(id)
+  }
 }
 
 function setContext(contextStr) {
@@ -96,22 +102,22 @@ function refreshPeers() {
   if (stickyAgent) {
     found = Object.keys(peers).find(k=>peers[k].displayName == stickyAgent)
     if (found) {
-      // window.setTimeout(()=>{setAgent(stickyAgent)},1000)
-      setAgent(stickyAgent)
+      window.setTimeout(()=>{setAgent(stickyAgent)},1000) // TODO can I get rid of this timeout
     }
   }
   else if (Object.keys(peers).length > 0) {
     setAgent(peers[Object.keys(peers)[0]].displayName)
   }
   h = ''
-  if (stickyAgent) {
-    h += "<p>Sticky Agent: " + stickyAgent + "</p>"
-  }
-  h += '<ul>'
+  h += '<ul style="list-style-type: none; line-height: 1.5;padding-left: 5px;">'
   for(let p in peers) {
     h += `<li><a href="." onclick="javascript:setAgent('${peers[p].displayName}');return false;">${peers[p].displayName}</a></li>`
   }
+  if (stickyAgent && !found) {
+    h += "<li>" + stickyAgent + " [OFFLINE]</li>"
+  }
   h += '</ul>'
+
   peersDiv.innerHTML = h
 }
 
@@ -122,8 +128,9 @@ function refreshContexts() {
     const dateB = b.modified ? new Date(b.modified) : new Date(0);
     return dateB - dateA;
   });
-  h = '<ul>'
-  h += `<li><a href="." onclick="javascript:setContext('');return false;">New</a></li>`
+  h = ''
+  h += '<ul style="list-style-type: none; line-height: 1.5;padding-left: 5px;">'
+  h += `<li><a href="." onclick="javascript:setContext('');return false;">+New</a></li>`
   for(c of contexts) {
     cl = (c.id == selectedContext)?"selected":""
     h += `<li class="${cl}"><a href="." title="${new Date(c.modified).toLocaleString()}" onclick="javascript:setContext('${c.id}');return false;">${c.display}</a></li>`
@@ -175,6 +182,7 @@ function neoRTC(url) {
   }
 
   this.rtcConnect = (targetId,video,audio)=>{
+    this.rtcTargetId = targetId  // set this here since since promise will be delayed
     this.mediaPromise.then(()=>{this._rtcConnect(targetId,video,audio)})
   }
 
@@ -277,11 +285,6 @@ function neoRTC(url) {
       this.connectStatus = true
       this.onConnectStatusChanged?.(this.connectStatus)
       this.onStatusChanged?.(this.getStatus())
-      let stickyAgent = getCookie('stickyAgent');
-      if (stickyAgent) {
-        // this.socket.emit("getContexts", stickyAgent)
-        window.setTimeout(()=>{setAgent(stickyAgent)},1000)
-      }
     });
 
     
@@ -336,7 +339,7 @@ function neoRTC(url) {
     this.rtcTargetId = targetId
     this.key = generateGUID()
 
-    this.socket.emit("getContexts", this.rtcTargetId)
+    // this.socket.emit("getContexts", this.rtcTargetId)
 
     this.rtcDisconnect()
 
@@ -405,6 +408,7 @@ function neoRTC(url) {
       function onMetaDataChanged(m) {
         console.log('onMetaDatachanged', m)
         selectedContext = m.id
+        chatheader.innerHTML = m.display
         refreshContexts()
       }
       this.channel.onmessage = (e)=>{
@@ -593,10 +597,10 @@ window.onload = ()=>{
     cColor = ['red','yellow','green']
     ledIndicator.style.backgroundColor = cColor[s]
     statusText.innerHTML = cText[s]    
-    // if (s != 2) {
-    //   contexts = []
-    //   refreshContexts()
-    // }
+    if (s != 2) {
+      contexts = []
+      refreshContexts()
+    }
   }
   rtc.onPeersChanged = (p)=>{
     console.log('peers', p)
@@ -609,6 +613,20 @@ window.onload = ()=>{
   getStream()
   .then(getDevices)
   .then(gotDevices);
+
+    // window.onload = function() {
+  const twistyState = getCookie('twistyState');
+  const twistyContent = document.getElementById('twistyContent');
+  const twistyButton = document.getElementById('twistyButton');
+  if (twistyState === 'shown') {
+    twistyContent.style.display = 'block';
+    twistyButton.textContent = 'Show Less';
+  } else {
+    twistyContent.style.display = 'none';
+    twistyButton.textContent = '...';
+  }
+    // }
+
   sendTxt.focus()
 }
 
