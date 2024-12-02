@@ -190,9 +190,10 @@ class LLM(ILLM):
         # ask model to summarize conversation
         summary = await self.summarize()
         print("Summary:", summary)
-        if self.summary != summary:
-            self.summary = summary
-            await self.notifyMetaDataChanged()
+        # if self.summary != summary:
+        self.summary = summary
+        # always notify because the log has been modified (sort order etc
+        await self.notifyMetaDataChanged()
         self.save()
 
     def getMessages(self):
