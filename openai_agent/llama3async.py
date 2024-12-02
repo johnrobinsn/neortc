@@ -75,7 +75,8 @@ class Worker:
             # model_name = "meta-llama/Llama-3.1-8B"
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
-                load_in_8bit=True,
+                # load_in_8bit=True,
+                load_in_4bit=True,
                 device_map="auto"
             )
 
