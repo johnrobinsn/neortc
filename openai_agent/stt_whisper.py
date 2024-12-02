@@ -154,12 +154,12 @@ class STT:
 async def process_out_queue(outQ: Queue):
     loop = asyncio.get_event_loop()
     while True:
-        print('waiting for outq result')
+        # print('waiting for outq result')
         command,result,stt = await loop.run_in_executor(None, outQ.get)
-        print('got outq result')
+        # print('got outq result')
         if command == 'stop':
             break
-        print("Processed result:", result,stt)
+        # print("Processed result:", result,stt)
         s = STT.getInstance(stt)
         if s:
             if result:
@@ -206,11 +206,11 @@ class Worker:
                     buffers[stt] = []
                 if stt not in runs:
                     runs[stt] = []
-                print('buffer:', buffer.shape, buffer.dtype, stt)
+                # print('buffer:', buffer.shape, buffer.dtype, stt)
                 buffer = buffer.mean(axis=0) #warning implicit float conversion
                 # buffer = buffer[::self.num_channels]
                 buffer = buffer[::2]
-                print('buffer mono:', buffer.shape, buffer.dtype)
+                # print('buffer mono:', buffer.shape, buffer.dtype)
                 # ratio = self.whisper_sample_rate / self.sample_rate
                 # ratio = 16000 / 48000
                 #TODO this is a hack to get the ratio right
@@ -219,23 +219,23 @@ class Worker:
                 buffer.astype(np.int16).tofile('foo48.pcm')
                 buffer = resample(buffer, ratio, 'sinc_best')
                 buffer = buffer.astype(np.int16)
-                print('resampled buffer:', buffer.shape, buffer.dtype)
+                # print('resampled buffer:', buffer.shape, buffer.dtype)
 
                 float_buffer2 = buffer.astype(np.float32) / np.iinfo(np.int16).max
                 # print('float_buffer2:', float_buffer2.shape, float_buffer2.dtype)
                 float_buffer2 = float_buffer2.reshape(-1,512)
                 # print('float_buffer2a:', float_buffer2.shape, float_buffer2.dtype)
                 p = model(torch.from_numpy(float_buffer2),16000)
-                print('VAD:', p.shape, p)
+                # print('VAD:', p.shape, p)
                 p = torch.all(p<0.25)
-                print('VAD2:', p)
+                # print('VAD2:', p)
 
 
                 # Silence detection
                 rms = np.sqrt(np.mean(buffer**2))
                 # silence_threshold = 600  # Adjust this threshold as needed
                 silence_threshold = 5  # Adjust this threshold as needed
-                print('rms:', rms)
+                # print('rms:', rms)
 
                 is_silent = rms < silence_threshold
                 # is_silent = False
@@ -294,7 +294,7 @@ class Worker:
                     audio_segment.export(filename, format="mp3")
 
                     t = asr(float_buffer)
-                    print('stt:', t)
+                    # print('stt:', t)
                     outQ.put(('process',t,stt))
                     buffers[stt] = []
                     # bargeIn = False
