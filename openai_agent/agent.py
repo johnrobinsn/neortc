@@ -112,6 +112,7 @@ class Peer:
 
             print('*** warning self.listener:', self.listener)
             context.addListener(self.listener)
+            context.addMetaDatalistener(self.metaDataListener)
 
             # send log to peer
             self.replaceLog()
