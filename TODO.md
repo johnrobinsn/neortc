@@ -4,11 +4,12 @@
 - [X] agent id is not stable across restarts - make sticky work
 - [X] hide crap in panel with a twisty and persist in cookie (default hidden)
 - [X] show selected context/chat in UI
-- [ ] show selected context at top of chat and update when metadata changes
+- [X] show selected context at top of chat and update when metadata changes
+- [ ] why does clicking on 'new untitled' open panel?
 - [ ] move getting contexts and metadata to datachannel
-- [ ] clean up agent list in UI css and current selected one.
+- [X] clean up agent list in UI css and current selected one.
 - [X] move logout above 'junk drawer'
-- [ ] can I get rid of the extra temporary untitled documents and the slow garbage collection process
+- [X] can I get rid of the extra temporary untitled documents and the slow garbage collection process
 - [X] context list not refreshed when disconnected
 - [ ] context list has a bit of latency now
 - [ ] refactor/cleanup client code
