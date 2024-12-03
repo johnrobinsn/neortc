@@ -111,10 +111,11 @@ function refreshPeers() {
   h = ''
   h += '<ul style="list-style-type: none; line-height: 1.5;padding-left: 5px;">'
   for(let p in peers) {
-    h += `<li><a href="." onclick="javascript:setAgent('${peers[p].displayName}');return false;">${peers[p].displayName}</a></li>`
+    cl = (peers[p].displayName == stickyAgent)?"selected":""
+    h += `<li class="${cl}"><a href="." onclick="javascript:setAgent('${peers[p].displayName}');return false;">${peers[p].displayName}</a></li>`
   }
   if (stickyAgent && !found) {
-    h += "<li>" + stickyAgent + " [OFFLINE]</li>"
+    h += '<li class="selected">' + stickyAgent + " [OFFLINE]</li>"
   }
   h += '</ul>'
 
@@ -130,7 +131,8 @@ function refreshContexts() {
   });
   h = ''
   h += '<ul style="list-style-type: none; line-height: 1.5;padding-left: 5px;">'
-  h += `<li><a href="." onclick="javascript:setContext('');return false;">+New</a></li>`
+  cl = window.rtc.getStatus() == 2?"new online":"new"
+  h += `<li class="${cl}"><a href="." onclick="javascript:setContext('');return false;">New Untitled...</a></li>`
   for(c of contexts) {
     cl = (c.id == selectedContext)?"selected":""
     h += `<li class="${cl}"><a href="." title="${new Date(c.modified).toLocaleString()}" onclick="javascript:setContext('${c.id}');return false;">${c.display}</a></li>`
@@ -596,10 +598,20 @@ window.onload = ()=>{
     cText = ['Off','Off','On']
     cColor = ['red','yellow','green']
     ledIndicator.style.backgroundColor = cColor[s]
-    statusText.innerHTML = cText[s]    
+    statusText.innerHTML = cText[s]
+
     if (s != 2) {
       contexts = []
       refreshContexts()
+    }
+
+    const elements = document.querySelectorAll('.new')
+    // elements.forEach(e=>e.style.display = (s==2)?'block':'none')
+    if (s==2) {
+      elements.forEach(e=>e.classList.add('online'))
+    }
+    else {
+      elements.forEach(e=>e.classList.remove('online'))
     }
   }
   rtc.onPeersChanged = (p)=>{

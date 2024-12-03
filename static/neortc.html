@@ -120,6 +120,14 @@
       a { color: #e0e0e0}
     }
 
+    .new {
+      display: none;
+    }
+
+    .online {
+      display: block;
+    }
+
 
   </style>
 </head>
@@ -130,6 +138,7 @@
     </button>
     <h4 id="header" style="margin: 0; text-align: left; width: 100%;">Zero</h4>
     <div class="chat-status" style="display: flex; justify-content: flex-end; align-items: center; padding: 10px;">
+      <span class="new" style="margin-right: 10px;"><a href="" onclick="setContext('');return false;" style="color:white;">New&nbsp;Untitled...</a></span>
       <span class="led-indicator" id="led-indicator" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #e0e0e0; background-color: red; margin-right: 10px;"></span>
       <span id="status-text">Off</span>
       </div>
