@@ -48,22 +48,6 @@ const statusText = document.querySelector('#status-text')
 const header = document.querySelector('#header')
 const chatheader = document.querySelector('#chat-header')
 
-// function getCookie(name) {
-//   const value = `; ${document.cookie}`;
-//   const parts = value.split(`; ${name}=`);
-//   if (parts.length === 2) return parts.pop().split(';').shift();
-//   else return null;
-// }
-
-// function setCookie(name, value, days) {
-//   let expires = "";
-//   if (days) {
-//     const date = new Date();
-//     date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
-//     expires = `; expires=${date.toUTCString()}`;
-//   }
-//   document.cookie = `${name}=${value || ""}${expires}; path=/`;
-// }
 
 function setAgent(name) {
   document.title = `Zero: ${name}`;
@@ -71,8 +55,12 @@ function setAgent(name) {
   setCookie('stickyAgent',name,365)
   peers = window.rtc.peers
   id = Object.keys(peers).find(k=>peers[k].displayName == name)
-  if (id)
-    window.rtc.socket.emit("getContexts", id) // TODO this should not be here... 
+  if (id) {
+    if (window.rtc.channel) {
+      window.rtc.channel.send(JSON.stringify({'t':'getContexts','p':id}))
+    }
+    // TODO error handling
+  }
   if (id && id != window.rtc.rtcTargetId) {
     contexts = []
     refreshPeers()
@@ -239,15 +227,7 @@ function neoRTC(url) {
     })
 
     let self = this
-    this.socket.on("getContextsResult", (id, ctxs)=>{
-      contexts = ctxs
-      // only update if coming from the currently selected agent
-      if (id == this.rtcTargetId) {
-        console.log('updating contexts:', id, self.rtcTargetId)
-        refreshContexts()
-      }
-      else console.log('not updating contexts:', id, self.rtcTargetId)
-    })
+
 
     this.socket.on("peersChanged", (peers)=>{
       this.peers = peers
@@ -413,6 +393,13 @@ function neoRTC(url) {
         chatheader.innerHTML = m.display
         refreshContexts()
       }
+
+      function onGetContextsResult(m) {
+        console.log('onGetContextsResultxx', m)
+        contexts = m
+        refreshContexts()
+      }
+
       this.channel.onmessage = (e)=>{
         console.log(e.data)
         let m = JSON.parse(e.data)
@@ -422,6 +409,7 @@ function neoRTC(url) {
         if (m.t == 'replaceLog') replaceLog(m.p)
         else if (m.t == 'appendLog') appendLog(m.p)
         else if (m.t == 'onMetaDataChanged') onMetaDataChanged(m.p)
+        else if (m.t == 'onGetContextsResult') onGetContextsResult(m.p)
         else console.log('unhandled datachannel message')
       }
       this.channel.onclose = (e)=>{

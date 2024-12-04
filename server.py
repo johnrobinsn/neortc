@@ -26,31 +26,28 @@ neortc_accounts = {item['email']: item for item in neortc_accounts}
 
 print('neortc_accounts:',neortc_accounts)
 # Create a dictionary from an array of objects with one of the fields as a key
-def create_dict_from_array(array, key_field):
-    return 
+# def create_dict_from_array(array, key_field):
+#     return 
 
 # Example usage
-example_array = [
-    {'id': 1, 'name': 'Alice'},
-    {'id': 2, 'name': 'Bob'},
-    {'id': 3, 'name': 'Charlie'}
-]
+# example_array = [
+#     {'id': 1, 'name': 'Alice'},
+#     {'id': 2, 'name': 'Bob'},
+#     {'id': 3, 'name': 'Charlie'}
+# ]
 
-example_dict = create_dict_from_array(example_array, 'id')
-print(example_dict)
+# example_dict = create_dict_from_array(example_array, 'id')
+# print(example_dict)
 print('neortc_secret:',neortc_secret)
 
 from os import kill, getpid
 from ssl import SSLContext, PROTOCOL_TLS_SERVER
 from asyncio import create_task
 from aiohttp import web
-# from aiohttp.web_runner import GracefulExit
+
 from socketio import AsyncServer
 
 import asyncio
-
-# from auth_neortc import neortc_secret
-# from openai_agent.agent import start as start_oai
 
 peers = {} 
 
@@ -64,14 +61,6 @@ sio = AsyncServer(cors_allowed_origins='*')
 #         print('periodic',peers,peer)
 #         await sio.emit('blahblah', room=peer)
 #         await asyncio.sleep(1)
-
-# @sio.event
-# async def forwardMessage(sid,target_sid,m):
-#     await sio.emit('onMessage', (sid,m,), room=target_sid)
-
-# @sio.event
-# async def sendText(sid,target_sid,t):
-#     await sio.emit('sendText', (sid,t,), room=target_sid)
 
 @sio.event
 async def error(e):
@@ -94,18 +83,6 @@ async def connect(sid,env,auth):
         return False
     else:
         await sio.emit('peersChanged', (peers,))
-
-# forward to agent
-@sio.event
-async def getContexts(sid,target_sid):
-    log.info("Forwarding getContexts")
-    await sio.emit('getContexts',sid,room=target_sid)
-
-# forward reply back to client
-@sio.event
-async def getContextsResult(sid,target_sid,contexts):
-    log.info("forwarding reply getContextsResult %s", target_sid)
-    await sio.emit('getContextsResult',(sid,contexts,),room=target_sid if target_sid != '' else None)
 
 @sio.event
 async def broadcaster(sid,info):
@@ -147,14 +124,6 @@ async def disconnect(sid):
 
 routes = web.RouteTableDef()
 
-# @routes.get('/')
-# async def handle_get(request):
-#     token = request.query.get('token', '')
-#     if neortc_secret and token != neortc_secret:
-#         return web.Response(text=".")
-#     else:
-#         return web.FileResponse('./static/index.html')
-
 @routes.get('/')
 async def handle_get(request):
     token = request.cookies.get('session_token')
@@ -165,10 +134,7 @@ async def handle_get(request):
     else:
         return web.HTTPFound('/neortc')
 
-    
-# Hardcoded credentials
-# VALID_EMAIL = "johnrobinsn@gmail.com"
-# VALID_PASSWORD = "n304J0hn!"
+#TODO needs to be fixed... hardcoded probably need a db for long lived sessions
 SESSION_TOKEN = neortc_secret #secrets.token_urlsafe(32) # TODO needs to be fixed... hardcoded
 
 @routes.post('/auth')
