@@ -248,6 +248,11 @@ class Agent:
 
         self.contexts = self.loadAll()
         self.peers = {}
+
+    def name(self):
+        # TODO use hostname
+        n = config.get('agent_name','default')
+        n = f'{self.agentName}-{n}'        
     
     def loadAll(self):
         c = {}
@@ -324,7 +329,7 @@ class Agent:
                 except Exception as e:
                     log.info('Exception: %s', e)
 
-        log.info('Exiting OpenAI Agent...')     
+        log.info('Exiting Agent...')     
 
     def callbacks(self):
         @self.sio.event
@@ -334,12 +339,9 @@ class Agent:
             log.info('Watcher Connected')
             await self.sio.emit('watcher')
 
-            displayName = config.get('agent_name','default')
-            displayName = f'{self.agentName}-{displayName}'
 
-            await self.sio.emit("broadcaster", {'displayName':displayName});
+            await self.sio.emit("broadcaster", {'displayName':self.name()})
             self.connected = True
-
 
         @self.sio.event
         async def broadcaster():
@@ -361,7 +363,6 @@ class Agent:
                 await peer.pc.setRemoteDescription(description)
 
                 # add tracks if we have them
-
                 try:
                     await peer.pc.setLocalDescription(await peer.pc.createAnswer())
                 except Exception as e:
@@ -439,7 +440,7 @@ def startAgent(promptFunc,agentName):
             task.cancel()
         loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         loop.close()
-        print("Application exited cleanly")
+        log.info("Agent exited cleanly")
 
 
 
