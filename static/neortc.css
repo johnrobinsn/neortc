@@ -1,0 +1,116 @@
+.user {color:aquamarine;}
+.assistant {color: lightblue;}
+.tool {color: yellow;}
+.system {color: red;}
+
+pre { 
+  white-space: pre-wrap; 
+  color: inherit; /* Override Bootstrap color */
+  line-height: initial;
+}
+body, html {
+  height: 100%;
+  margin: 0;
+  background-color: black; /* Set background color to black */
+}
+button {
+  outline:none;
+}
+button:focus {
+  outline:none; /* Remove outline on focus */
+}
+.btn:focus {
+  outline:initial; /* Remove outline on focus */
+}
+.chat-container {
+  height: calc(100% - 50px); /* Adjust height to account for header */
+  display: flex;
+  flex-direction: row;
+}
+.chat-header {
+  background-color: #1f1f1f;
+  color: white;
+  display: flex;
+  align-items: center;
+  padding: 0px;
+  height: 50px; /* Fixed height for header */
+}
+.chat-panel {
+  background-color: #2c2c2c;
+  color: #e0e0e0;
+  overflow-y: auto;
+}
+.chat-history {
+  background-color: #1f1f1f;
+  color: #e0e0e0;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+.hamburger {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  outline: none;
+}
+.hamburger:focus {
+  outline: none; /* Remove outline on focus */
+}
+@media (max-width: 768px) {
+  .chat-container {
+    flex-direction: column;
+  }
+  .chat-panel {
+    display: none; /* Hide panel by default on small screens */
+    width: 100%;
+    height: auto;
+    position: absolute;
+    top: 50px; /* Position below the header */
+    z-index: 1;
+  }
+  .chat-history {
+    width: 100%;
+    height: auto;
+  }
+  .hamburger {
+    display: block; /* Show hamburger on small screens */
+  }
+}
+@media (min-width: 769px) {
+  .hamburger {
+    display: none; /* Hide hamburger on large screens */
+  }
+  .chat-panel {
+    display: block !important; /* Show panel by default on large screens */
+    width: 25%;
+    height: 100%;
+    position: relative;
+    top: 0;
+    z-index: auto;
+    padding: 5px;
+  }
+  .chat-history {
+    width: 75%;
+    height: 100%;
+  }
+}
+
+.selected {
+  background-color: #1f1f1f; color: white;
+  a {color: white;}
+}
+
+li {
+  line-height: 1.5;
+  margin-bottom: 5px;
+  a { color: #e0e0e0}
+}
+
+.new {
+  display: none;
+}
+
+.online {
+  display: block;
+}

@@ -6,130 +6,8 @@
   <title>Chat Application</title>
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="neortc.css">
   <link rel="manifest" href="/manifest.json">
-  <style>
-    .user {color:aquamarine;}
-    .assistant {color: lightblue;}
-    .tool {color: yellow;}
-    .system {color: red;}
-
-
-    pre { 
-      white-space: pre-wrap; 
-      color: inherit; /* Override Bootstrap color */
-      /* margin: inherit; */
-      line-height: initial;
-    }
-    body, html {
-      height: 100%;
-      margin: 0;
-      background-color: black; /* Set background color to black */
-    }
-    button {
-      outline:none;
-    }
-    button:focus {
-      outline:none; /* Remove outline on focus */
-    }
-    .btn:focus {
-      outline:initial; /* Remove outline on focus */
-    }
-    .chat-container {
-      height: calc(100% - 50px); /* Adjust height to account for header */
-      display: flex;
-      flex-direction: row;
-    }
-    .chat-header {
-      background-color: #1f1f1f;
-      color: white;
-      display: flex;
-      align-items: center;
-      padding: 10px;
-      height: 50px; /* Fixed height for header */
-    }
-    .chat-panel {
-      background-color: #2c2c2c;
-      color: #e0e0e0;
-      overflow-y: auto;
-    }
-    .chat-history {
-      background-color: #1f1f1f;
-      color: #e0e0e0;
-      overflow-y: auto;
-      flex-grow: 1;
-    }
-    .hamburger {
-      background: none;
-      border: none;
-      color: white;
-      font-size: 24px;
-      cursor: pointer;
-      outline: none;
-    }
-    .hamburger:focus {
-      outline: none; /* Remove outline on focus */
-    }
-    @media (max-width: 768px) {
-      .chat-container {
-        flex-direction: column;
-      }
-      .chat-panel {
-        display: none; /* Hide panel by default on small screens */
-        width: 100%;
-        height: auto;
-        position: absolute;
-        top: 50px; /* Position below the header */
-        z-index: 1;
-      }
-      .chat-history {
-        width: 100%;
-        height: auto;
-      }
-      .hamburger {
-        display: block; /* Show hamburger on small screens */
-      }
-    }
-    @media (min-width: 769px) {
-      .hamburger {
-        display: none; /* Hide hamburger on large screens */
-      }
-      .chat-panel {
-        display: block !important; /* Show panel by default on large screens */
-        width: 25%;
-        height: 100%;
-        position: relative;
-        top: 0;
-        z-index: auto;
-        padding: 5px;
-      }
-      .chat-history {
-        width: 75%;
-        height: 100%;
-      }
-    }
-
-    .selected {
-      background-color: #1f1f1f; color: white;
-      a {color: white;}
-    }
-
-
-    li {
-      line-height: 1.5;
-      margin-bottom: 5px;
-      a { color: #e0e0e0}
-    }
-
-    .new {
-      display: none;
-    }
-
-    .online {
-      display: block;
-    }
-
-
-  </style>
 </head>
 <body>
   <div class="chat-header">
@@ -138,8 +16,8 @@
     </button>
     <h4 id="header" style="margin: 0; text-align: left; width: 100%;">Zero</h4>
     <div class="chat-status" style="display: flex; justify-content: flex-end; align-items: center; padding: 10px;">
-      <span class="new" style="margin-right: 10px;"><a href="" onclick="setContext('');return false;" style="color:white;">New&nbsp;Untitled...</a></span>
-      <span class="led-indicator" id="led-indicator" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #e0e0e0; background-color: red; margin-right: 10px;"></span>
+      <span class="new" style="margin-right: 10px;"><a href="" onclick="setContext('');return false;" style="color:white;">+New...</a></span>
+      <span class="led-indicator" id="led-indicator" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #e0e0e0; background-color: red; margin-right: 4px;"></span>
       <span id="status-text">Off</span>
       </div>
   </div>
@@ -152,7 +30,6 @@
       <div>Chats</div>
       <div class="search-container" style="padding: 10px;">
         <input type="text" class="form-control" id="searchInput" placeholder="Search...">
-        <!-- <button class="btn btn-primary" type="button" id="searchButton" onclick="performSearch()">Search</button> -->
       </div>
       <script>
         function performSearch() {
@@ -192,58 +69,7 @@
         <audio id="remote-audio" autoplay playsinline></audio>
         </div>
       </div>
-      <script>
-        function setCookie(name, value, days) {
-          const d = new Date();
-          d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-          const expires = "expires=" + d.toUTCString();
-          document.cookie = name + "=" + value + ";" + expires + ";path=/";
-        }
-
-        function getCookie(name) {
-          const cname = name + "=";
-          const decodedCookie = decodeURIComponent(document.cookie);
-          const ca = decodedCookie.split(';');
-          for (let i = 0; i < ca.length; i++) {
-            let c = ca[i];
-            while (c.charAt(0) == ' ') {
-              c = c.substring(1);
-            }
-            if (c.indexOf(cname) == 0) {
-              return c.substring(cname.length, c.length);
-            }
-          }
-          return "";
-        }
-
-        function toggleTwisty() {
-          const twistyContent = document.getElementById('twistyContent');
-          const twistyButton = document.getElementById('twistyButton');
-          if (twistyContent.style.display === 'none') {
-            twistyContent.style.display = 'block';
-            twistyButton.textContent = 'Show Less';
-            setCookie('twistyState', 'shown', 7);
-          } else {
-            twistyContent.style.display = 'none';
-            twistyButton.textContent = '...';
-            setCookie('twistyState', 'hidden', 7);
-          }
-        }
-
-        // window.onload = function() {
-        //   const twistyState = getCookie('twistyState');
-        //   const twistyContent = document.getElementById('twistyContent');
-        //   const twistyButton = document.getElementById('twistyButton');
-        //   if (twistyState === 'shown') {
-        //     twistyContent.style.display = 'block';
-        //     twistyButton.textContent = 'Show Less';
-        //   } else {
-        //     twistyContent.style.display = 'none';
-        //     twistyButton.textContent = '...';
-        //   }
-        // }
-      </script>
-
+  
     <!-- <button id="voiceBtn"><i class="fa-solid fa-first-order"></i></button> -->
     </div>
     <div class="chat-history" style="display: flex; flex-direction: column;">
@@ -274,28 +100,8 @@
       </div>
     </div>
   </div>
-  <script>
-    function togglePanel(forceClose) {
-      const chatPanel = document.getElementById('chatPanel');
-      if (forceClose || chatPanel.style.display === 'block') {
-        chatPanel.style.display = 'none';
-      } else {
-        chatPanel.style.display = 'block';
-        chatPanel.style.height = 'calc(100%)'; // Set height to fill the remaining space below the header
-      }
-    }
-
-  function deleteCookie(name) {
-    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    }
-
-  function logOut() {
-    deleteCookie('session_token');
-    window.location.href = '/';
-  }
-  </script>
-  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+  <!-- <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script> -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script> -->
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
   <script src="/socket.io.js"></script>
   <script src="neortc.js"></script>

@@ -17,6 +17,64 @@
 # limitations under the License.
 */
 
+
+function setCookie(name, value, days) {
+  const d = new Date();
+  d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+  const expires = "expires=" + d.toUTCString();
+  document.cookie = name + "=" + value + ";" + expires + ";path=/";
+}
+
+function getCookie(name) {
+  const cname = name + "=";
+  const decodedCookie = decodeURIComponent(document.cookie);
+  const ca = decodedCookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) == ' ') {
+      c = c.substring(1);
+    }
+    if (c.indexOf(cname) == 0) {
+      return c.substring(cname.length, c.length);
+    }
+  }
+  return "";
+}
+
+function toggleTwisty() {
+  const twistyContent = document.getElementById('twistyContent');
+  const twistyButton = document.getElementById('twistyButton');
+  if (twistyContent.style.display === 'none') {
+    twistyContent.style.display = 'block';
+    twistyButton.textContent = 'Show Less';
+    setCookie('twistyState', 'shown', 7);
+  } else {
+    twistyContent.style.display = 'none';
+    twistyButton.textContent = '...';
+    setCookie('twistyState', 'hidden', 7);
+  }
+}
+
+function togglePanel(forceClose) {
+  const chatPanel = document.getElementById('chatPanel');
+  if (forceClose || chatPanel.style.display === 'block') {
+    chatPanel.style.display = 'none';
+  } else {
+    chatPanel.style.display = 'block';
+    chatPanel.style.height = 'calc(100%)'; // Set height to fill the remaining space below the header
+  }
+}
+
+function deleteCookie(name) {
+document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+}
+
+function logOut() {
+deleteCookie('session_token');
+window.location.href = '/';
+}
+
+
 let enableVideo=false
 
 let peerConnection;
@@ -120,7 +178,7 @@ function refreshContexts() {
   h = ''
   h += '<ul style="list-style-type: none; line-height: 1.5;padding-left: 5px;">'
   cl = window.rtc.getStatus() == 2?"new online":"new"
-  h += `<li class="${cl}"><a href="." onclick="javascript:setContext('');return false;">New Untitled...</a></li>`
+  h += `<li class="${cl}"><a href="." onclick="javascript:setContext('');return false;">+New...</a></li>`
   for(c of contexts) {
     cl = (c.id == selectedContext)?"selected":""
     h += `<li class="${cl}"><a href="." title="${new Date(c.modified).toLocaleString()}" onclick="javascript:setContext('${c.id}');return false;">${c.display}</a></li>`
