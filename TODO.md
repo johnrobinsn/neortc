@@ -5,14 +5,15 @@
 - [X] hide crap in panel with a twisty and persist in cookie (default hidden)
 - [X] show selected context/chat in UI
 - [X] show selected context at top of chat and update when metadata changes
-- [ ] why does clicking on 'new untitled' open panel?
-- [ ] move getting contexts and metadata to datachannel
+- [X] why does clicking on 'new untitled' open panel?
+- [X] move getting contexts and metadata to datachannel
 - [X] clean up agent list in UI css and current selected one.
 - [X] move logout above 'junk drawer'
 - [X] can I get rid of the extra temporary untitled documents and the slow garbage collection process
 - [X] context list not refreshed when disconnected
 - [ ] context list has a bit of latency now
 - [ ] refactor/cleanup client code
+- [ ] break out css and organize
 - [ ] Some distractor when agent is thinking
 - [ ] filter out system prompt by default
 - [ ] llama generation very slow
