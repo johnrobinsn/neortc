@@ -11,6 +11,7 @@
 - [X] move logout above 'junk drawer'
 - [X] can I get rid of the extra temporary untitled documents and the slow garbage collection process
 - [X] context list not refreshed when disconnected
+- [ ] clean up logging; color coding
 - [ ] context list has a bit of latency now
 - [ ] refactor/cleanup client code
 - [ ] break out css and organize
