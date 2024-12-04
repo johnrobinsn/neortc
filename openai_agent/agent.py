@@ -70,9 +70,12 @@ class Peer:
             print('********** onMetaDataChanged', m)
             if self.dataChannel and self.dataChannel.readyState == 'open':
                 print('sending')
+                # TODO do I need both messages
                 msg = {'t':'onMetaDataChanged','p':m}
                 self.dataChannel.send(json.dumps(msg))
+                await self.updateContexts()
             else:
+                # TODO getting some occasional errors here
                 print('data channel not open')                
 
         # context modified update connected peers
@@ -154,6 +157,8 @@ class Peer:
                     self.ttsTrack.clearAudio()
                 elif o['t'] == 'enableAudio':
                     self.ttsTrack.enableAudio(o['p'])
+                elif o['t'] == 'getContexts':
+                    await self.updateContexts()
 
             @channel.on('close')
             async def on_close():
@@ -208,6 +213,23 @@ class Peer:
             async def on_ended():
                 log.info('track ended')
 
+    async def updateContexts(self,id=''):
+        metaData = [v.getMetaData() for i,(k,v) in enumerate(agent.contexts.items())]
+        log.info("Updating contexts: %s", metaData)
+        log.info("contexts: %s", agent.contexts)    
+        try:
+            # await self.sio.emit("getContextsResult", (id, metaData,))
+            #             print('********** onMetaDataChanged', m)
+            if self.dataChannel and self.dataChannel.readyState == 'open':
+                msg = {'t':'onGetContextsResult','p':metaData}
+                print('sending: ', msg)
+                self.dataChannel.send(json.dumps(msg))
+            else:
+                print('data channel not open. could not send contexts')         
+            
+        except Exception as e:
+            log.info('Exception: %s', e)
+
 class Agent:
 
     nextContextId=0
@@ -237,8 +259,10 @@ class Agent:
                 l = LLM(self.promptFunc,self.agentName)
                 l.load(f'{dir}/{file}')
                 c[l.id] = l
+                # TODO can we get rid of all this in agent
                 async def onContextMetaDataChanged(m):
-                    await self.updateContexts()
+                    # await self.updateContexts()
+                    pass
                 l.addMetaDatalistener(onContextMetaDataChanged)
         except Exception as e:
             print(f"Error reading directory: {e}")
@@ -256,9 +280,9 @@ class Agent:
                 for k in list(self.contexts.keys()):
                     if self.contexts[k].dead:
                         del self.contexts[k]                
-                await self.updateContexts()
+                # await self.updateContexts()
             l.addMetaDatalistener(onContextMetaDataChanged)
-            await self.updateContexts() # broadcast
+            # await self.updateContexts() # broadcast
             return l
 
     async def createPeer(self,sid,key,contextStr = ''):
@@ -266,6 +290,7 @@ class Agent:
         c = await self.getContext(contextStr)
         p = Peer(c,key)
         p.setContext(c)
+        await p.updateContexts()
         return p
         
     def getPeer(self,key):
@@ -301,15 +326,6 @@ class Agent:
 
         log.info('Exiting OpenAI Agent...')     
 
-    async def updateContexts(self,id=''):
-        metaData = [v.getMetaData() for i,(k,v) in enumerate(self.contexts.items())]
-        log.info("Updating contexts: %s", metaData)
-        log.info("contexts: %s", self.contexts)    
-        try:
-            await self.sio.emit("getContextsResult", (id, metaData,))    
-        except Exception as e:
-            log.info('Exception: %s', e)
-
     def callbacks(self):
         @self.sio.event
         async def connect():
@@ -324,10 +340,6 @@ class Agent:
             await self.sio.emit("broadcaster", {'displayName':displayName});
             self.connected = True
 
-        @self.sio.event
-        async def getContexts(id):
-            log.info("agent:getContexts")
-            await self.updateContexts(id=id)
 
         @self.sio.event
         async def broadcaster():
