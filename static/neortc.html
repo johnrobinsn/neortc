@@ -275,9 +275,9 @@
     </div>
   </div>
   <script>
-    function togglePanel() {
+    function togglePanel(forceClose) {
       const chatPanel = document.getElementById('chatPanel');
-      if (chatPanel.style.display === 'block') {
+      if (forceClose || chatPanel.style.display === 'block') {
         chatPanel.style.display = 'none';
       } else {
         chatPanel.style.display = 'block';

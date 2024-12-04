@@ -72,7 +72,7 @@ function setAgent(name) {
 function setContext(contextStr) {
   try {
   window.rtc?.setContext(contextStr)
-  togglePanel()
+  togglePanel(true)
   } catch(e) { console.log(e)}
 }
 
