@@ -101,6 +101,8 @@ class Peer:
 
     def setContext(self,context):
         print('setting context on peer', context)
+        if self.ttsTrack:
+            self.ttsTrack.clearAudio()
         if self.context:
             if self.listener:
                 self.context.delListener(self.listener)
@@ -252,7 +254,8 @@ class Agent:
     def name(self):
         # TODO use hostname
         n = config.get('agent_name','default')
-        n = f'{self.agentName}-{n}'        
+        n = f'{self.agentName}-{n}'      
+        return n  
     
     def loadAll(self):
         c = {}
