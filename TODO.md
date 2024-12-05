@@ -11,6 +11,8 @@
 - [X] move logout above 'junk drawer'
 - [X] can I get rid of the extra temporary untitled documents and the slow garbage collection process
 - [X] context list not refreshed when disconnected
+- [X] switching contexts should likely stop audio output
+- [X] only send full context list at beginning and then send deltas (add, delete, modify)
 - [ ] clean up logging; color coding
 - [ ] context list has a bit of latency now
 - [ ] refactor/cleanup client code
