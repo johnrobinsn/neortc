@@ -115,7 +115,10 @@ function setAgent(name) {
   id = Object.keys(peers).find(k=>peers[k].displayName == name)
   if (id) {
     if (window.rtc.channel) {
+      window.rtc.channelReady.then(()=>{
+        console.log('channel ready; sending getContexts:', id)
       window.rtc.channel.send(JSON.stringify({'t':'getContexts','p':id}))
+      })
     }
     // TODO error handling
   }
@@ -418,6 +421,7 @@ function neoRTC(url) {
     }
   
     this.peerConnection.onconnectionstatechange = e => {
+      console.log('connection state change:', this.peerConnection.connectionState)
       this.onPeerConnectionStateChange?.(this.peerConnection.connectionState)
       this.peerStatus = this.peerConnection.connectionState=='connected'
       this.onStatusChanged?.(this.getStatus())
@@ -425,8 +429,13 @@ function neoRTC(url) {
   
       try {
       this.channel = this.peerConnection.createDataChannel("chat")
-      this.channel.onopen = (e)=>{
-      }
+      this.channelReady = new Promise((resolve,reject)=>{
+        this.channel.onopen = (e)=>{
+          console.log('data channel open')
+          resolve()
+        }
+        // window.setTimeout(()=>{resolve()},5000)
+      })
 
       function appendLog(m) {
         console.log(m)
