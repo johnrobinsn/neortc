@@ -1,5 +1,35 @@
 # TODO
 
+Streaming support
+on prompt text create a "generation id" that is used to track the response (text or audio)
+message or start generating using same "generation id"
+append to log entry... same "generation" id
+message for stop generating same "generation" id
+be able to stop/cancel generation
+audio output if enable has same generation id and can be cancelled
+cancels all upcoming/queued transactions.
+assumes request/response... 
+
+# simplifying assumption only one entry can be open at a time.  rest are queued is this really
+# a problem?
+# on client side.  add a div with id on open with animated distractor at bottom on write Entry update div with correct id.
+# for now log errors if I get a openEntry when there is already an entry open... 
+# prompts are updated on close with full accumulated entry
+# if a prompt comes in while an entry is open... queued it up... 
+# I need to look at bargeIn again to see how I want to wire that up.
+# bargeIn should at a minimum stop tts output and allow new audio input to be taken in.
+
+openEntry(id,role)
+writeEntry(id,)
+closeEntry(id,reason) # done, cancelled
+
+what if initiated by agent... not a response to a prompt
+
+is a trigger a kind of prompt... alarm or external event is like a trigger
+
+
+
+
 ## General
 - [X] agent id is not stable across restarts - make sticky work
 - [X] hide crap in panel with a twisty and persist in cookie (default hidden)
@@ -13,6 +43,7 @@
 - [X] context list not refreshed when disconnected
 - [X] switching contexts should likely stop audio output
 - [X] only send full context list at beginning and then send deltas (add, delete, modify)
+- [X] race condition on chrome mobile.  data channel not open yet in setContext
 - [ ] clean up logging; color coding
 - [ ] context list has a bit of latency now
 - [ ] refactor/cleanup client code
