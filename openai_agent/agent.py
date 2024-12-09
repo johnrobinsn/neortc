@@ -82,13 +82,13 @@ class Peer:
         async def onMessage(m):
             if m:
                 if self.dataChannel and self.dataChannel.readyState == 'open':
-                    msg = {'t':'appendLog','p':m}
-                    self.dataChannel.send(json.dumps(msg))
+                    # msg = {'t':'appendLog','p':m}
+                    self.dataChannel.send(json.dumps(m))
                 else:
                     log.error(f"datachannel closed {self.peerName}")
                     return # bail out
-                if self.ttsTrack and m['role'] == 'assistant' and m['content']:
-                    await self.ttsTrack.say(m['content'][0]['text']) 
+                if self.ttsTrack and m['t'] == 'closeEntry' and m['role'] == 'assistant' and m['data']:
+                    await self.ttsTrack.say(m['data']) 
             else:
                 self.ttsTrack.clearAudio()
 
@@ -236,8 +236,9 @@ class Agent:
 
     nextContextId=0
 
-    def __init__(self,promptFunc,agentName):
+    def __init__(self,promptFunc,agentName,promptStreamingFunc=None):
         self.promptFunc = promptFunc
+        self.promptStreamingFunc = promptStreamingFunc
         self.agentName = agentName
         # self.sio = AsyncClient(ssl_verify=False,logger=True,engineio_logger=True)
         self.sio = AsyncClient(ssl_verify=False)
@@ -264,7 +265,7 @@ class Agent:
             files = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
             for index, file in enumerate(files, start=1):
                 print(f"{index}. {file}")
-                l = LLM(self.promptFunc,self.agentName)
+                l = LLM(self.promptFunc,self.agentName,self.promptStreamingFunc)
                 l.load(f'{dir}/{file}')
                 c[l.id] = l
                 # TODO can we get rid of all this in agent
@@ -281,7 +282,7 @@ class Agent:
         if cid in self.contexts:
             return self.contexts[cid]
         else:
-            l = LLM(self.promptFunc,self.agentName)
+            l = LLM(self.promptFunc,self.agentName,self.promptStreamingFunc)
             self.contexts[l.id] = l
             async def onContextMetaDataChanged(m):
                 # garbage collecting
@@ -413,7 +414,7 @@ def handle_sigint(loop):
     # for task in asyncio.all_tasks(loop):
     #     task.cancel()
 
-def startAgent(promptFunc,agentName):
+def startAgent(promptFunc,agentName,promptStreaming=None):
     global agent # TODO ick
 
     loop = asyncio.get_event_loop()
@@ -428,7 +429,7 @@ def startAgent(promptFunc,agentName):
     else:
         log.info('Attempting connection to %s', signal_server)
     try:
-        agent = Agent(promptFunc,agentName)
+        agent = Agent(promptFunc,agentName,promptStreaming)
         loop.run_until_complete(agent.start(signal_server))
     except asyncio.CancelledError:
         print("Application is shutting down2...")

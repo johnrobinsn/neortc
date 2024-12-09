@@ -86,9 +86,10 @@ class ILLM(ABC):
 class LLM(ILLM):
     client = AsyncOpenAI(api_key=openai_api_key)
     nameIndex = 0
-    def __init__(self,promptFunc,agentName):
+    def __init__(self,promptFunc,agentName,promptStreamingFunc=None):
         self.agentName = agentName
         self.promptFunc = promptFunc
+        self.promptStreamingFunc = promptStreamingFunc
         self.created = datetime.utcnow().isoformat() + "Z"
         self.modified = datetime.utcnow().isoformat() + "Z"
         self.id = str(uuid.uuid4())
@@ -97,6 +98,7 @@ class LLM(ILLM):
         self.persisted = False
         self.dead = False
         LLM.nameIndex += 1
+        self.currentEntry = None
 
         self.local_dt = datetime.utcnow() #now(datetime.timezone.utc)
         self.date_time_string = self.local_dt.strftime("%A, %B %d, %Y %H:%M:%S %Z UTC")
@@ -184,8 +186,8 @@ class LLM(ILLM):
     async def appendMessage(self,m):
         self.modified = datetime.utcnow().isoformat() + "Z"
         self.prompt_messages.append(m)
-        for l in self.listeners:
-            await l(m if isinstance(m, dict) else m.__dict__)
+        # for l in self.listeners:
+        #     await l(m if isinstance(m, dict) else m.__dict__)
         
         # ask model to summarize conversation
         summary = await self.summarize()
@@ -195,6 +197,31 @@ class LLM(ILLM):
         # always notify because the log has been modified (sort order etc
         await self.notifyMetaDataChanged()
         self.save()
+
+    async def openEntry(self, role):
+        self.currentEntry = {'role':role,'content':''}
+        for l in self.listeners:
+            await l({'t':'openEntry','role':role})
+    
+    async def writeEntry(self,data):
+        self.currentEntry['content'] += data
+        for l in self.listeners:
+            await l({'t':'writeEntry','data':data})
+
+    # content key vs data key... 
+    async def closeEntry(self):
+        for l in self.listeners:
+            await l({'t':'closeEntry','role':self.currentEntry['role'],'data':self.currentEntry['content']})        
+        await self.appendMessage({
+                "role": self.currentEntry['role'],
+                "content": [
+                    {
+                        "type": "text",
+                        "text": self.currentEntry['content']
+                    },
+                ],
+            })
+        self.currentEntry = None
 
     def getMessages(self):
         return self.prompt_messages
@@ -219,15 +246,18 @@ class LLM(ILLM):
         return await self.promptFunc(log)             
 
     async def prompt(self,t):
-        await self.appendMessage({
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": t
-                    },
-                ],
-            })
+        # await self.appendMessage({
+        #         "role": "user",
+        #         "content": [
+        #             {
+        #                 "type": "text",
+        #                 "text": t
+        #             },
+        #         ],
+        #     })
+        await self.openEntry('user')
+        await self.writeEntry(t)
+        await self.closeEntry()
 
         start = datetime.now()
 
@@ -245,7 +275,17 @@ class LLM(ILLM):
         # })
 
         #llama
-        response_message = await self.promptFunc(self.prompt_messages)
+        if self.promptStreamingFunc:
+            response = self.promptStreamingFunc(self.prompt_messages)
+            await self.openEntry('assistant')
+            async for r in response:
+                await self.writeEntry(r)
+            await self.closeEntry()
+        else:
+            response = await self.promptFunc(self.prompt_messages)
+            await self.openEntry('assistant')
+            await self.writeEntry(response)
+            await self.closeEntry()
         # response_message = response[0][0]['generated_text'][-1]['content']
         #openai
         # response = await LLM.client.chat.completions.create(
@@ -254,15 +294,16 @@ class LLM(ILLM):
         # )
         # response_message = response.choices[0].message.content
 
-        await self.appendMessage({
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "text",
-                    "text": response_message
-                },
-            ],
-        })        
+        # await self.appendMessage({
+        #     "role": "assistant",
+        #     "content": [
+        #         {
+        #             "type": "text",
+        #             "text": response_message
+        #         },
+        #     ],
+        # })        
+
 
 
 class OpenAI_LLM(LLM):
