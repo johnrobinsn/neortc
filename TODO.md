@@ -31,27 +31,16 @@ is a trigger a kind of prompt... alarm or external event is like a trigger
 
 
 ## General
-- [X] agent id is not stable across restarts - make sticky work
-- [X] hide crap in panel with a twisty and persist in cookie (default hidden)
-- [X] show selected context/chat in UI
-- [X] show selected context at top of chat and update when metadata changes
-- [X] why does clicking on 'new untitled' open panel?
-- [X] move getting contexts and metadata to datachannel
-- [X] clean up agent list in UI css and current selected one.
-- [X] move logout above 'junk drawer'
-- [X] can I get rid of the extra temporary untitled documents and the slow garbage collection process
-- [X] context list not refreshed when disconnected
-- [X] switching contexts should likely stop audio output
-- [X] only send full context list at beginning and then send deltas (add, delete, modify)
-- [X] race condition on chrome mobile.  data channel not open yet in setContext
+- [ ] add streaming support for llama
+- [ ] filter out system prompt by default
+- [ ] experiment with making audio dialog better.  be able to tweak values from UI
+- [ ] record at max frequency.  and record at whisper frequency for debugging
 - [ ] clean up logging; color coding
 - [ ] context list has a bit of latency now
 - [ ] refactor/cleanup client code
 - [ ] break out css and organize
 - [ ] Some distractor when agent is thinking
-- [ ] filter out system prompt by default
 - [ ] llama generation very slow
-- [ ] can I stream output from the llm to the client?
 - [ ] llama agent isn't exiting properly with crtl-c
 - [ ] add ability to delete context from UI
 - [ ] add ability to edit past input from UI (fork or edit)
@@ -151,6 +140,20 @@ is a trigger a kind of prompt... alarm or external event is like a trigger
 - [X] just disable video on clientside for now.
 - [X] autostart server
 - [X] use appzero certs
+- [X] agent id is not stable across restarts - make sticky work
+- [X] hide crap in panel with a twisty and persist in cookie (default hidden)
+- [X] show selected context/chat in UI
+- [X] show selected context at top of chat and update when metadata changes
+- [X] why does clicking on 'new untitled' open panel?
+- [X] move getting contexts and metadata to datachannel
+- [X] clean up agent list in UI css and current selected one.
+- [X] move logout above 'junk drawer'
+- [X] can I get rid of the extra temporary untitled documents and the slow garbage collection process
+- [X] context list not refreshed when disconnected
+- [X] switching contexts should likely stop audio output
+- [X] only send full context list at beginning and then send deltas (add, delete, modify)
+- [X] race condition on chrome mobile.  data channel not open yet in setContext
+- [X] can I stream output from the llm to the client?
 ## My Agent
 - [ ] wire up llama as llm
 - [ ] Todo List is a note type
