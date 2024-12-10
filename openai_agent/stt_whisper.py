@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import datetime
 import logging
 #logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -40,6 +42,7 @@ class STT:
 
         self.capturingAudio=False
         self.audio = []
+        self.fullCapture = []
         self.sample_rate = None
         self.num_channels = None
         self.llm = None
@@ -47,6 +50,7 @@ class STT:
         self.id = STT._nextId
         STT._nextId += 1
         STT._instances.append(self)
+        self.captureDir = None
 
     def __del__(self):
         STT._instances.remove(self)
@@ -67,6 +71,33 @@ class STT:
             return
         self.capturingAudio = f
         print('Capturing Audio:', f)
+
+        if self.capturingAudio:
+            self.audio = []
+            self.fullCapture = []
+            now = datetime.datetime.now()
+            dirname = f'recordings/{now.strftime("%Y%m%d-%H%M%S")}'
+            if not os.path.exists(dirname):
+                os.makedirs(dirname,exist_ok=True)
+            self.captureDir = dirname
+
+
+        if not self.capturingAudio and len(self.fullCapture) > 1:
+            buffer = np.concatenate(self.fullCapture, axis=1)
+
+
+            filename = f'{self.captureDir}/fullcapture.mp3'
+            audio_segment = AudioSegment(
+                buffer.tobytes(), 
+                frame_rate=self.sample_rate,#16000,
+                sample_width=2,  # 2 bytes for 16-bit audio
+                channels=self.num_channels#1
+            )
+
+            # Export the AudioSegment to an MP3 file
+            audio_segment.export(filename, format="mp3")
+            self.fullCapture = []
+
         # TODO probably set minumum number of frames to something meaningful
         # if not self.capturingAudio and len(self.audio) > 0: # on end of capture send to asr
         #     #TODO should I empty self.audio when starting capture.
@@ -124,12 +155,14 @@ class STT:
                 if not self.capturingAudio:
                     continue # drop frame
 
+
                 self.sample_rate = frame.sample_rate
                 self.num_channels = len(frame.layout.channels)
                 f = frame.to_ndarray()
                 # print('frame:', f.shape, f.dtype, ' ', frame.sample_rate)
                 # print('frame:', f.min(), f.max(), f.mean(), f.std())
                 # print('channels:', frame.layout.channels)
+                self.fullCapture.append(f)
                 self.audio.append(f)
 
                 if len(self.audio) >= 8: # 8=>320ms, 16=>640ms
@@ -137,7 +170,7 @@ class STT:
                     # print('buffer:', buffer.shape, buffer.dtype, ' ', self.sample_rate)
                     # processed_buffer = await self.processor.process_audio(buffer, self.sample_rate)
                     # await w.send('stt',(buffer,))
-                    w.inQ.put(('process',(buffer,self.id)))
+                    w.inQ.put(('process',(buffer,self.id,self.captureDir)))
                     self.audio = []  # Clear the buffer after processing
 
             except MediaStreamError:
@@ -201,7 +234,7 @@ class Worker:
                 # nonlocal bargeIn
                 nonlocal silenceCount
                 # nonlocal bargeInCount
-                buffer, stt = args
+                buffer, stt, captureDir = args
                 if stt not in buffers:
                     buffers[stt] = []
                 if stt not in runs:
@@ -216,7 +249,7 @@ class Worker:
                 #TODO this is a hack to get the ratio right
                 ratio = 16000 / 48000
 
-                buffer.astype(np.int16).tofile('foo48.pcm')
+                # buffer.astype(np.int16).tofile('foo48.pcm')
                 buffer = resample(buffer, ratio, 'sinc_best')
                 buffer = buffer.astype(np.int16)
                 # print('resampled buffer:', buffer.shape, buffer.dtype)
@@ -265,24 +298,13 @@ class Worker:
                     # print('float_buffer:', float_buffer.shape, float_buffer.dtype)
 
                     # create file name with date and time
-                    import datetime
+                    
                     now = datetime.datetime.now()
-                    filename = now.strftime("%Y%m%d-%H%M%S")
-                    # filename = filename + '.pcm'
-                    # with wave.open(filename, 'wb') as f:
-                    #     f.setnchannels(1)
-                    #     f.setsampwidth(2)
-                    #     f.setframerate(16000)
-                    #     f.writeframes(buffer.tobytes())
+                    # filename = 
+                    # if not os.path.exists('recordings'):
+                    #     os.makedirs('recordings')
 
-                    # buffer.astype(np.int16).tofile('foo.pcm')
-
-                    # create directory
-                    import os
-                    if not os.path.exists('recordings'):
-                        os.makedirs('recordings')
-
-                    filename = f'recordings/{filename}.mp3'
+                    filename = f'{captureDir}/{now.strftime("%Y%m%d-%H%M%S")}.mp3'
                     audio_segment = AudioSegment(
                         buffer.tobytes(), 
                         frame_rate=16000,
