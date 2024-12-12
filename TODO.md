@@ -31,7 +31,9 @@ is a trigger a kind of prompt... alarm or external event is like a trigger
 
 
 ## General
-- [ ] add streaming support for llama
+- [X] add streaming support for llama
+- [X] add streaming support to tts output
+- [ ] wire up 'stop' to stop generating and clear audio.
 - [ ] filter out system prompt by default
 - [ ] experiment with making audio dialog better.  be able to tweak values from UI
 - [ ] record at max frequency.  and record at whisper frequency for debugging
