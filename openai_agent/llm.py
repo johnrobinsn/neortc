@@ -206,7 +206,7 @@ class LLM(ILLM):
     async def writeEntry(self,data):
         self.currentEntry['content'] += data
         for l in self.listeners:
-            await l({'t':'writeEntry','data':data})
+            await l({'t':'writeEntry','data':data,'role':self.currentEntry['role']})
 
     # content key vs data key... 
     async def closeEntry(self):

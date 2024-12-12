@@ -50,8 +50,11 @@ class TTSTrack:
         self.audioEnabled = False
         self._createTTSTrack()
 
+        self.text = ''
+
     def clearAudio(self):
         self.packetq.clear()
+        self.text = ''
     
     def enableAudio(self,f):
         log.info('enableAudio: %s',f)
@@ -84,6 +87,20 @@ class TTSTrack:
 
             self.packetq.insert(0,(duration, pts_count, segment))
         await self._requestTTS(t,on_segment)
+
+    async def open(self):
+        self.text = ''
+
+    async def write(self,text):
+        self.text = self.text + text
+        last_newline = self.text.rfind('\n')
+        if last_newline != -1:
+            await self.say(self.text[:last_newline + 1])
+            self.text = self.text[last_newline + 1:]
+        
+    async def close(self):
+        await self.say(self.text)
+        self.txt = ''
 
     def getTrack(self):
         return self.ttsTrack

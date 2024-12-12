@@ -87,8 +87,16 @@ class Peer:
                 else:
                     log.error(f"datachannel closed {self.peerName}")
                     return # bail out
-                if self.ttsTrack and m['t'] == 'closeEntry' and m['role'] == 'assistant' and m['data']:
-                    await self.ttsTrack.say(m['data']) 
+                # if self.ttsTrack and m['t'] == 'closeEntry' and m['role'] == 'assistant' and m['data']:
+                #     await self.ttsTrack.say(m['data'])
+                #
+                if m['role'] == 'assistant':
+                    if m['t'] == 'openEntry':
+                        await self.ttsTrack.open()
+                    elif m['t'] == 'writeEntry':
+                        await self.ttsTrack.write(m['data'])
+                    elif m['t'] == 'closeEntry':
+                        await self.ttsTrack.close()
             else:
                 self.ttsTrack.clearAudio()
 
