@@ -1,7 +1,8 @@
 # TODO
 
 Streaming support
-on prompt text create a "generation id" that is used to track the response (text or audio)
+on prompt text create a "generation id" that - [ ] break out css and organize
+is used to track the response (text or audio)
 message or start generating using same "generation id"
 append to log entry... same "generation" id
 message for stop generating same "generation" id
@@ -31,17 +32,23 @@ is a trigger a kind of prompt... alarm or external event is like a trigger
 
 
 ## General
-- [X] add streaming support for llama
-- [X] add streaming support to tts output
-- [ ] wire up 'stop' to stop generating and clear audio.
-- [ ] filter out system prompt by default
-- [ ] experiment with making audio dialog better.  be able to tweak values from UI
 - [ ] record at max frequency.  and record at whisper frequency for debugging
+- [ ] break out css and organize
+- [ ] Add stock lookup, weather lookup, time lookup
+- [ ] hook up rag
+- [ ] accumlate bookmarks... x, browser, youtube, pocket... 
+- [ ] hook up recipes... chat with my recipes
+- [ ] Some distractor when agent is thinking
+- [ ] backup models... 
+- [ ] try to deal with background audio... like news in the background
+- [ ] notebooklm do a paper review... 
+- [ ] wire up 'stop' to stop generating and clear audio.
+- [X] Streaming tts on period or nl….
+- [X] filter out system prompt by default
+- [ ] experiment with making audio dialog better.  be able to tweak values from UI
 - [ ] clean up logging; color coding
 - [ ] context list has a bit of latency now
 - [ ] refactor/cleanup client code
-- [ ] break out css and organize
-- [ ] Some distractor when agent is thinking
 - [ ] llama generation very slow
 - [ ] llama agent isn't exiting properly with crtl-c
 - [ ] add ability to delete context from UI
@@ -49,11 +56,8 @@ is a trigger a kind of prompt... alarm or external event is like a trigger
 - [ ] add ability to share context from UI
 - [ ] add ability to regenerate content generation back in time
 - [ ] add ability to rename context from UI
-- [X] Add modified to context metadata
 - [ ] exception handling if config file has errors
-- [X] sort by modified date
 - [ ] Better UI handling when not connected to agent
-- [X] logout button
 - [ ] better icon/splash screen
 - [ ] search chat list
 - [ ] better auth if no session token on any screen redirect to auth
@@ -110,6 +114,11 @@ is a trigger a kind of prompt... alarm or external event is like a trigger
 - [ ] add stun support
 - [ ] agent should have access to system stats like was stun used etc.
 - [ ] background voice mode on android (will I need a service?)
+- [X] Add modified to context metadata
+- [X] sort by modified date
+- [X] logout button
+- [X] add streaming support for llama
+- [X] add streaming support to tts output
 - [X] move status to top
 - [X] handle peer connection state in status
 - [X] move recordings into a directory 
