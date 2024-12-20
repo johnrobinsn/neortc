@@ -93,13 +93,14 @@ class TTSTrack:
 
     async def write(self,text):
         self.text = self.text + text
-        last_newline = self.text.rfind('\n')
+        last_newline = max(self.text.rfind('\n'), self.text.rfind('.'))
         if last_newline != -1:
             await self.say(self.text[:last_newline + 1])
             self.text = self.text[last_newline + 1:]
         
     async def close(self):
-        await self.say(self.text)
+        if self.text.strip():
+            await self.say(self.text)
         self.txt = ''
 
     def getTrack(self):
