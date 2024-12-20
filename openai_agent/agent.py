@@ -133,8 +133,11 @@ class Peer:
     def replaceLog(self):
         if self.dataChannel and self.dataChannel.readyState == 'open':
             msg = {'t':'onMetaDataChanged','p':self.context.getMetaData()}
-            self.dataChannel.send(json.dumps(msg))            
-            msg = {'t':'replaceLog','p':self.context.prompt_messages}
+            self.dataChannel.send(json.dumps(msg))
+            def filter(e):
+                return e['role'] != 'system'
+            filteredLog = [e for e in self.context.prompt_messages if filter(e)]          
+            msg = {'t':'replaceLog','p':filteredLog}
             self.dataChannel.send(json.dumps(msg))
 
     def setupPeer(self):
