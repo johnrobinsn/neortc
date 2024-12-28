@@ -29,7 +29,40 @@ import uuid
 
 from abc import ABC, abstractmethod
 
+import lancedb
+from lancedb.rerankers import ColbertReranker
+
+
+from pydantic import create_model
+import inspect, json
+from inspect import Parameter
+
+def sums(a:int, b:int=1):
+    "Adds a + b"
+    return a + b
+
+def schema(f):
+    kw = {n:(o.annotation, ... if o.default==Parameter.empty else o.default)
+          for n,o in inspect.signature(f).parameters.items()}
+    s = create_model(f'Input for `{f.__name__}`', **kw).schema()
+    return dict(name=f.__name__, description=f.__doc__, parameters=s)
+
+
+print('schema:',schema(sums))
+
 openai_api_key = config.get('openai_api_key')
+
+db_path = os.path.expanduser('~/.neodocs.db')
+db = lancedb.connect(db_path)
+tbl = db.open_table("my_table")
+reranker = ColbertReranker()
+
+# results = (tbl.search(query, query_type="hybrid") # Hybrid means text + vector
+#     # .where("category = 'film'", prefilter=True) # Restrict to only docs in the 'film' category
+#     .limit(limit) # Get 10 results from first-pass retrieval
+#     .rerank(reranker=reranker) # For the reranker to compute the final ranking
+# )
+
 
 class ILLM(ABC):
     @abstractmethod
@@ -86,7 +119,7 @@ class ILLM(ABC):
 class LLM(ILLM):
     client = AsyncOpenAI(api_key=openai_api_key)
     nameIndex = 0
-    def __init__(self,promptFunc,agentName,promptStreamingFunc=None):
+    def __init__(self,promptFunc,agentName,promptStreamingFunc=None,initialPrompt=None):
         self.agentName = agentName
         self.promptFunc = promptFunc
         self.promptStreamingFunc = promptStreamingFunc
@@ -102,16 +135,19 @@ class LLM(ILLM):
 
         self.local_dt = datetime.utcnow() #now(datetime.timezone.utc)
         self.date_time_string = self.local_dt.strftime("%A, %B %d, %Y %H:%M:%S %Z UTC")
-        self.prompt_messages = [
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"You are a helpful AI assistant.  The current date and time is {self.date_time_string}.  When reporting the time or date, speak succinctly.  When telling a joke, put the whole joke on the first line. If I ask you to stop simply respond with the word \"OK\"."
-                    },
-                ],
-            },
+        if initialPrompt:
+            self.prompt_messages = initialPrompt
+        else:
+            self.prompt_messages = [
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"You are a helpful AI assistant.  The current date and time is {self.date_time_string}.  When reporting the time or date, speak succinctly.  When telling a joke, put the whole joke on the first line. If I ask you to stop simply respond with the word \"OK\"."
+                        },
+                    ],
+                },
         ]
         self.listeners = []
         self.metaDataListeners = []
@@ -255,6 +291,30 @@ class LLM(ILLM):
         #             },
         #         ],
         #     })
+
+
+        # enable rag 
+        if False:
+            results = (tbl.search(t, query_type="hybrid") # Hybrid means text + vector
+                # .where("category = 'film'", prefilter=True) # Restrict to only docs in the 'film' category
+                .limit(3) # Get 10 results from first-pass retrieval
+                .rerank(reranker=reranker) # For the reranker to compute the final ranking
+            )
+
+            context = [e['text'] for e in results.to_list()]
+
+            context = '\n\n'.join(context)
+
+            t = f'''
+Answer the following question using the provided context:
+
+## Context
+{context}
+
+## Question
+{t}
+'''
+
         await self.openEntry('user')
         await self.writeEntry(t)
         await self.closeEntry()
