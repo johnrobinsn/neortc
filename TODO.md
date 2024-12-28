@@ -32,6 +32,7 @@ is a trigger a kind of prompt... alarm or external event is like a trigger
 
 
 ## General
+- [ ] better status reporting in client when doing large model loads
 - [ ] record at max frequency.  and record at whisper frequency for debugging
 - [ ] break out css and organize
 - [ ] Add stock lookup, weather lookup, time lookup
