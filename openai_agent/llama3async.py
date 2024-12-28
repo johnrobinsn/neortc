@@ -9,8 +9,6 @@ import asyncio
 import torch
 from transformers import AutoModelForCausalLM,AutoTokenizer,pipeline
 
-model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
-
 # pipeline = transformers.pipeline(
 #     "text-generation",
 #     model=model_id,
@@ -24,26 +22,26 @@ model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 #     {"role": "user", "content": "Who was George Washington?"},
 # ]
 
-messages = [
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "You are a pirate chatbot who always responds in pirate speak!"
-                    },                    
-                ],
-            },
-            {
-                "role": "user", 
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Who was George Washington?"
-                    },   
-                ]
-            }
-        ]
+# messages = [
+#             {
+#                 "role": "system",
+#                 "content": [
+#                     {
+#                         "type": "text",
+#                         "text": "You are a pirate chatbot who always responds in pirate speak!"
+#                     },                    
+#                 ],
+#             },
+#             {
+#                 "role": "user", 
+#                 "content": [
+#                     {
+#                         "type": "text",
+#                         "text": "Who was George Washington?"
+#                     },   
+#                 ]
+#             }
+#         ]
 
 
 
@@ -55,17 +53,21 @@ messages = [
 
 
 class Worker:
-    def __init__(self):
+    def __init__(self,model_id=None):
+        if model_id is None:
+            model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+        else:
+            self.model_id = model_id
         self.lock = asyncio.Lock()
         self.inQ = Queue()
         self.outQ = Queue()
         self.p = Process(
             target=self.loop,
-            args=(self.inQ, self.outQ))
+            args=(self.inQ, self.outQ, model_id))
         self.p.start()
 
     @staticmethod
-    def loop(inQ: Queue, outQ: Queue):
+    def loop(inQ: Queue, outQ: Queue, model_id: str):
         try:
             # asr = pipeline("automatic-speech-recognition",model="openai/whisper-large-v3",device=0)
             # asr = pipeline("automatic-speech-recognition",model="openai/whisper-tiny.en",device=0)
@@ -126,9 +128,9 @@ class Worker:
             self.inQ.put(task)
             return await asyncio.get_running_loop().run_in_executor(None, self.outQ.get)
 
-def startWorker():
+def startWorker(model_id=None):
     global w
-    w = Worker()
+    w = Worker(model_id)
 
 async def prompt(messages):
     # print('Prompting')
