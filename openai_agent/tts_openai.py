@@ -51,6 +51,10 @@ class TTSTrack:
         self._createTTSTrack()
 
         self.text = ''
+        self.muted = False
+
+    def mute(self, f):
+        self.muted = f
 
     def clearAudio(self):
         self.packetq.clear()
@@ -85,7 +89,8 @@ class TTSTrack:
 
             pts_count = round(duration * self.time_base)
 
-            self.packetq.insert(0,(duration, pts_count, segment))
+            if not self.muted:
+                self.packetq.insert(0,(duration, pts_count, segment))
         await self._requestTTS(t,on_segment)
 
     async def open(self):
