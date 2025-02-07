@@ -28,6 +28,11 @@ import asyncio
 from socketio import AsyncClient
 from aiortc import RTCSessionDescription, RTCPeerConnection, RTCConfiguration, RTCIceServer
 from aiortc.sdp import candidate_from_sdp
+from aiortc.mediastreams import MediaStreamError
+import numpy as np
+from termcolor import colored
+
+import datetime
 
 from aconfig import config
 
@@ -41,7 +46,7 @@ enableSTT = True
 
 # for each peer
 if enableSTT:
-    from stt_whisper import startWhisper,stopWhisper, STT
+    from stt_whisper import AsyncSTT
 if enableTTS:
     from tts_openai import TTSTrack
 
@@ -63,8 +68,23 @@ class Peer:
         self.setupPeer()
         self.context = None
         
-        self.stt = STT() # could probably defer this until really needed
+        self.stt = AsyncSTT(sample_rate=48000,num_channels=2,enableFullCapture=True) # could probably defer this until really needed
+
+        async def sttListener(s,e,d):
+            if self.context:
+                if e == 'final_transcript':
+                    await self.context.prompt(d)
+                elif e == 'voice_was_detected':
+                    await self.context.bargeIn()
+                    # TODO do I need mute and clearAudio both?
+                    self.ttsTrack.mute(True)
+                    self.ttsTrack.clearAudio()
+        self.stt.addListener(sttListener)
+
         self.dataChannel = None
+
+        self.capturingAudio = False
+        self.audio = []
  
         async def onMetaDataChanged(m):
             print('********** onMetaDataChanged', m)
@@ -92,13 +112,15 @@ class Peer:
                 #
                 if m['role'] == 'assistant':
                     if m['t'] == 'openEntry':
+                        self.ttsTrack.mute(False)
                         await self.ttsTrack.open()
                     elif m['t'] == 'writeEntry':
                         await self.ttsTrack.write(m['data'])
                     elif m['t'] == 'closeEntry':
                         await self.ttsTrack.close()
             else:
-                self.ttsTrack.clearAudio()
+                # TODO get rid of this code path
+                pass
 
         self.listener = onMessage
         self.metaDataListener = onMetaDataChanged              
@@ -117,11 +139,9 @@ class Peer:
             if self.metaDataListener:
                 self.context.delMetaDataListener(self.metaDataListener)
 
-        self.stt.setLLM(None)
         self.context = None
         if context:
             self.context = context
-            self.stt.setLLM(context)
 
             print('*** warning self.listener:', self.listener)
             context.addListener(self.listener)
@@ -165,7 +185,7 @@ class Peer:
                 elif o['t'] == 'setContext':
                     self.setContext(await agent.getContext(o['p']))
                 elif o['t'] == 'captureAudio':
-                    await self.stt.setCaptureAudio(o['p'])
+                    await self.setCaptureAudio(o['p'])
                 elif o['t'] == 'clearAudio':
                     self.ttsTrack.clearAudio()
                 elif o['t'] == 'enableAudio':
@@ -217,7 +237,7 @@ class Peer:
             if (track.kind == 'audio'):
                 # pass
                 log.info('Audio track received')
-                asyncio.create_task(self.stt.handle_audio(track))
+                asyncio.create_task(self.handle_audio(track))
             elif (track.kind == 'video'):
                 # asyncio.create_task(handle_video(track))
                 asyncio.create_task(drop_media_data(track))                        
@@ -225,6 +245,49 @@ class Peer:
             @track.on('ended')
             async def on_ended():
                 log.info('track ended')
+
+    async def setCaptureAudio(self,f):
+        if self.capturingAudio == f:
+            return
+        print('Capturing Audio:', f)
+
+        self.ttsTrack.clearAudio()
+        if f:
+            now = datetime.datetime.now()
+            newCaptureDir = f'recordings/{now.strftime("%Y%m%d-%H%M%S")}'
+            self.stt.captureDir = newCaptureDir # TODO
+        else:
+            self.stt.flush()
+
+        self.capturingAudio = f
+
+    async def handle_audio(self,track):
+        while True:        
+            try:
+                frame = await track.recv()
+
+                if not self.capturingAudio:
+                    continue # drop frame
+
+                self.sample_rate = frame.sample_rate
+                self.num_channels = len(frame.layout.channels)
+                f = frame.to_ndarray()
+                # print('frame:', f.shape, f.dtype, ' ', frame.sample_rate)
+                # print('frame:', f.min(), f.max(), f.mean(), f.std())
+                # print('channels:', frame.layout.channels)
+                # self.fullCapture.append(f)
+                self.audio.append(f)
+
+                if len(self.audio) >= 8: # 8=>320ms, 16=>640ms
+                    buffer = np.concatenate(self.audio, axis=1)
+                    # print('buffer:', buffer.shape, buffer.dtype, ' ', self.sample_rate)
+                    # processed_buffer = await self.processor.process_audio(buffer, self.sample_rate)
+                    self.stt.processBuffer(buffer)
+                    self.audio = []  # Clear the buffer after processing
+
+            except MediaStreamError:
+                # This exception is raised when the track ends
+                break
 
     async def updateContexts(self,id=''):
         metaData = [v.getMetaData() for i,(k,v) in enumerate(agent.contexts.items())]
@@ -322,7 +385,7 @@ class Agent:
     async def start(self,signal_server=SIGNAL_SERVER):
         log.warning('signal server: %s', signal_server)
         try:
-            startWhisper()
+            AsyncSTT.preload_shared_resources()
             await self.sio.connect(signal_server, auth={'token':neortc_secret},transports=['websocket'])
             await self.sio.wait()
         except asyncio.CancelledError:
@@ -332,7 +395,6 @@ class Agent:
             print(traceback.format_exc())
         finally:
             await self.sio.disconnect()
-            await stopWhisper()
 
             peerlist = list(self.peers.values())
             log.info('peerlist: %s', len(peerlist))
@@ -353,7 +415,6 @@ class Agent:
 
             log.info('Watcher Connected')
             await self.sio.emit('watcher')
-
 
             await self.sio.emit("broadcaster", {'displayName':self.name()})
             self.connected = True

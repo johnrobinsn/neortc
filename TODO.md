@@ -1,5 +1,8 @@
 # TODO
 
+-[X] bargeIn is not working
+stt.clearAudio is not quite what I want... I want to cancel all submtted llm streaming requests to stt... 
+
 Streaming support
 on prompt text create a "generation id" that - [ ] break out css and organize
 is used to track the response (text or audio)

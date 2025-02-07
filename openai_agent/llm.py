@@ -29,33 +29,33 @@ import uuid
 
 from abc import ABC, abstractmethod
 
-import lancedb
-from lancedb.rerankers import ColbertReranker
+# import lancedb
+# from lancedb.rerankers import ColbertReranker
 
 
-from pydantic import create_model
-import inspect, json
-from inspect import Parameter
+# from pydantic import create_model
+# import inspect, json
+# from inspect import Parameter
 
-def sums(a:int, b:int=1):
-    "Adds a + b"
-    return a + b
+# def sums(a:int, b:int=1):
+#     "Adds a + b"
+#     return a + b
 
-def schema(f):
-    kw = {n:(o.annotation, ... if o.default==Parameter.empty else o.default)
-          for n,o in inspect.signature(f).parameters.items()}
-    s = create_model(f'Input for `{f.__name__}`', **kw).schema()
-    return dict(name=f.__name__, description=f.__doc__, parameters=s)
+# def schema(f):
+#     kw = {n:(o.annotation, ... if o.default==Parameter.empty else o.default)
+#           for n,o in inspect.signature(f).parameters.items()}
+#     s = create_model(f'Input for `{f.__name__}`', **kw).schema()
+#     return dict(name=f.__name__, description=f.__doc__, parameters=s)
 
 
-print('schema:',schema(sums))
+# print('schema:',schema(sums))
 
 openai_api_key = config.get('openai_api_key')
 
-db_path = os.path.expanduser('~/.neodocs.db')
-db = lancedb.connect(db_path)
-tbl = db.open_table("my_table")
-reranker = ColbertReranker()
+# db_path = os.path.expanduser('~/.neodocs.db')
+# db = lancedb.connect(db_path)
+# tbl = db.open_table("my_table")
+# reranker = ColbertReranker()
 
 # results = (tbl.search(query, query_type="hybrid") # Hybrid means text + vector
 #     # .where("category = 'film'", prefilter=True) # Restrict to only docs in the 'film' category
@@ -132,6 +132,9 @@ class LLM(ILLM):
         self.dead = False
         LLM.nameIndex += 1
         self.currentEntry = None
+        self._bargeIn = False
+        self.promptQ = asyncio.Queue()
+        asyncio.get_event_loop().create_task(self._processQ())
 
         self.local_dt = datetime.utcnow() #now(datetime.timezone.utc)
         self.date_time_string = self.local_dt.strftime("%A, %B %d, %Y %H:%M:%S %Z UTC")
@@ -206,8 +209,12 @@ class LLM(ILLM):
         asyncio.get_event_loop().create_task(self.notifyMetaDataChanged())
 
     async def bargeIn(self):
-        for l in self.listeners:
-            await l(None)    
+        # for l in self.listeners:
+        #     await l(None) 
+        await self.writeEntry('BARGE IN')   
+        self._bargeIn = True
+        # if self.currentEntry and self.currentEntry['content']:
+        #     self.currentEntry['content'] += 'BARGE IN'
 
     def addMetaDatalistener(self,l):
         if l:
@@ -235,17 +242,31 @@ class LLM(ILLM):
         self.save()
 
     async def openEntry(self, role):
+        self._bargeIn = False
         self.currentEntry = {'role':role,'content':''}
         for l in self.listeners:
             await l({'t':'openEntry','role':role})
     
     async def writeEntry(self,data):
-        self.currentEntry['content'] += data
-        for l in self.listeners:
-            await l({'t':'writeEntry','data':data,'role':self.currentEntry['role']})
+        print('writeEntry:',data,';',self._bargeIn)
+        if not self._bargeIn:
+            if self.currentEntry and 'content' in self.currentEntry:            
+                self.currentEntry['content'] += data
+
+                # Important to check for barge in here since when we await the listeners
+                # we can be re-entered and more content can be streamed in
+                if data == 'BARGE IN':
+                    self._bargeIn = True
+
+                for l in self.listeners:
+                    await l({'t':'writeEntry','data':data,'role':self.currentEntry['role']})
+
+        else:
+            print('Currently barged in... dropping')
 
     # content key vs data key... 
     async def closeEntry(self):
+        self._bargeIn = False
         for l in self.listeners:
             await l({'t':'closeEntry','role':self.currentEntry['role'],'data':self.currentEntry['content']})        
         await self.appendMessage({
@@ -282,17 +303,15 @@ class LLM(ILLM):
         return await self.promptFunc(log)             
 
     async def prompt(self,t):
-        # await self.appendMessage({
-        #         "role": "user",
-        #         "content": [
-        #             {
-        #                 "type": "text",
-        #                 "text": t
-        #             },
-        #         ],
-        #     })
+        await self.promptQ.put(t)
 
+    async def _processQ(self):
+        # TODO shut this done when we are done
+        while True:
+            t = await self.promptQ.get()
+            await self._prompt(t)
 
+    async def _prompt(self,t):
         # enable rag 
         if False:
             results = (tbl.search(t, query_type="hybrid") # Hybrid means text + vector

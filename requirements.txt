@@ -22,4 +22,5 @@ torchaudio # silero
 lancedb
 rerankers[transformers]
 sentence-transformers
-pip install tantivy
+tantivy
+termcolor

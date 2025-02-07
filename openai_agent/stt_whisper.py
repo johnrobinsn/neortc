@@ -12,353 +12,111 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import datetime
 import logging
 #logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-from multiprocessing import Process, Queue
+# logging.getLogger("transformers").setLevel(logging.ERROR)
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+import threading
+from threadworker import ThreadWorker
+from multiprocessing import Queue
 import asyncio
 
 import numpy as np
-import torch
-from transformers import pipeline
 
-from aiortc.mediastreams import MediaStreamError
-from samplerate import resample
-import wave
 from pydub import AudioSegment
 
-# from openai_agent.llm_openai import prompt
-# from .. import llm_openai.prompt
-#from llm_openai import prompt
+from stt_whisper_sync import STT
 
+#TODO... 
+# state change for when model is loaded and ready
 
-class STT:
-    def __init__(self):
-        # TODO can this be slimmed down... what's actually used?
-        self.whisper_sample_rate = 16000
-
-        self.capturingAudio=False
-        self.audio = []
-        self.fullCapture = []
-        self.sample_rate = None
-        self.num_channels = None
-        self.llm = None
-        self.audioBuffer = []
-        self.id = STT._nextId
-        STT._nextId += 1
-        STT._instances.append(self)
-        self.captureDir = None
+class AsyncSTT(STT):
+    '''
+    AsyncSTT is a subclass of STT that provides a non-blocking API for doing transcripiton
+    using the whisper model.
+    '''
+    def __init__(self, sample_rate=48000, num_channels=2, captureDir='test/blah', enableFullCapture=False):
+        super().__init__(sample_rate,num_channels,captureDir,enableFullCapture)
+        self.w = ThreadWorker(supportOutQ=False)
+        self.shared_lock = threading.Lock()
+        self.loop = asyncio.get_event_loop()
 
     def __del__(self):
-        STT._instances.remove(self)
-
-    _nextId = 0
-    _instances = []
+        self.w.stop()
 
     @staticmethod
-    def getInstance(id):
-        for i in STT._instances:
-            if i.id == id:
-                return i
-        return None
+    def preload_shared_resources():
+        # preload the shared resources used by the parent class
+        STT.preload_shared_resources()
 
-    async def setCaptureAudio(self,f):
-
-        if self.capturingAudio == f:
-            return
-        self.capturingAudio = f
-        print('Capturing Audio:', f)
-
-        if self.capturingAudio:
-            self.audio = []
-            self.fullCapture = []
-            now = datetime.datetime.now()
-            dirname = f'recordings/{now.strftime("%Y%m%d-%H%M%S")}'
-            if not os.path.exists(dirname):
-                os.makedirs(dirname,exist_ok=True)
-            self.captureDir = dirname
-
-
-        if not self.capturingAudio and len(self.fullCapture) > 1:
-            buffer = np.concatenate(self.fullCapture, axis=1)
-
-
-            filename = f'{self.captureDir}/fullcapture.mp3'
-            audio_segment = AudioSegment(
-                buffer.tobytes(), 
-                frame_rate=self.sample_rate,#16000,
-                sample_width=2,  # 2 bytes for 16-bit audio
-                channels=self.num_channels#1
-            )
-
-            # Export the AudioSegment to an MP3 file
-            audio_segment.export(filename, format="mp3")
-            self.fullCapture = []
-
-        # TODO probably set minumum number of frames to something meaningful
-        # if not self.capturingAudio and len(self.audio) > 0: # on end of capture send to asr
-        #     #TODO should I empty self.audio when starting capture.
-        #     buffer = np.concatenate(self.audio,axis=1)
-        #     # take the mean across channels to reduce to a single channel
-        #     print('buffer2:', buffer.shape, buffer.dtype, ' ', self.sample_rate)
-        #     buffer = buffer.mean(axis=0)
-        #     print('buffer3:', buffer.shape, buffer.dtype, ' ', self.sample_rate)
-        #     buffer = buffer[::self.num_channels]
-        #     print('buffer4:', buffer.shape, buffer.dtype, ' ', self.sample_rate)
-        #     # buffer.astype(np.int16).tofile('foo48.pcm')
-
-        #     ratio = self.whisper_sample_rate / self.sample_rate
-        #     buffer = resample(buffer, ratio, 'sinc_best')
-
-        #     if False:
-        #         buffer.astype(np.int16).tofile('foo.pcm')
-
-        #         with open('test.pcm', 'wb') as f:
-        #             f.write(buffer.tobytes())
-
-        #         print('pcm created... ', buffer.shape, buffer.dtype, ' ', sample_rate)
-            
-            
-        #     # implement a high pass filter for the audio data in buffer
-
-
-
-        #     float_buffer = buffer.astype(np.float32) / np.iinfo(np.int16).max
-
-        #     t = await self.speech2Text(float_buffer)
-        #     if self.llm:
-        #         await self.llm.prompt(t['text'])
-        # self.audio = []
-
-    # async def speech2Text(self,float_buffer):
-    #     return await w.send('stt',(float_buffer,))
-    
-    def setLLM(self,llm):
-        self.llm = llm
-
-    async def handle_audio(self,track):
-        # global capturingAudio
-        # global audio
-        # global sample_rate
-        # global num_channels
-        
-        # https://stackoverflow.com/questions/31674416/python-realtime-audio-streaming-with-pyaudio-or-something-else
-        # isopen = False
-
-        while True:        
-            try:
-                frame = await track.recv()
-
-                if not self.capturingAudio:
-                    continue # drop frame
-
-
-                self.sample_rate = frame.sample_rate
-                self.num_channels = len(frame.layout.channels)
-                f = frame.to_ndarray()
-                # print('frame:', f.shape, f.dtype, ' ', frame.sample_rate)
-                # print('frame:', f.min(), f.max(), f.mean(), f.std())
-                # print('channels:', frame.layout.channels)
-                self.fullCapture.append(f)
-                self.audio.append(f)
-
-                if len(self.audio) >= 8: # 8=>320ms, 16=>640ms
-                    buffer = np.concatenate(self.audio, axis=1)
-                    # print('buffer:', buffer.shape, buffer.dtype, ' ', self.sample_rate)
-                    # processed_buffer = await self.processor.process_audio(buffer, self.sample_rate)
-                    # await w.send('stt',(buffer,))
-                    w.inQ.put(('process',(buffer,self.id,self.captureDir)))
-                    self.audio = []  # Clear the buffer after processing
-
-            except MediaStreamError:
-                # This exception is raised when the track ends
-                break
-        # self.audioHandler = handle_audio()
-
-        # def getAudioHandler(self):
-        #     if not self.audioHandler:
-        #         self.createAudioHandler()
-        #     return self.audioHandler
-
-
-async def process_out_queue(outQ: Queue):
-    loop = asyncio.get_event_loop()
-    while True:
-        # print('waiting for outq result')
-        command,result,stt = await loop.run_in_executor(None, outQ.get)
-        # print('got outq result')
-        if command == 'stop':
-            break
-        # print("Processed result:", result,stt)
-        s = STT.getInstance(stt)
-        if s:
-            if result:
-                await s.llm.prompt(result['text'])
+    async def asyncNotifyListeners(self, *result):
+        for listener in self.listeners:
+            if asyncio.iscoroutinefunction(listener):
+                await listener(self,*result)
             else:
-                await s.llm.bargeIn()
+                listener(self,*result)
+
+    def notifyListeners(self, eventType, data):
+        asyncio.run_coroutine_threadsafe(self.asyncNotifyListeners(eventType, data), self.loop)
+
+    def super_processBuffer(self, buffer):
+        # use a lock to protect the shared resources used by the parent class
+        with self.shared_lock:
+            return super().processBuffer(buffer)
         
-        # Process the result here
+    def processBuffer(self, buffer):
+        # dispatch processBuffer to threadworker
+        self.w.add_task(self.super_processBuffer, buffer)
 
-class Worker:
-    def __init__(self):
-        self.inQ = Queue()
-        self.outQ = Queue()
-        self.p = Process(
-            target=self.loop,
-            args=(self.inQ, self.outQ))
-        self.p.start()
+if __name__ == "__main__":
 
-    @staticmethod
-    def loop(inQ: Queue, outQ: Queue):
-        try:
-            print('Loading Silero VAD')
-            model, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
-                                        model='silero_vad',
-                                        force_reload=True)
-            print('Loaded Silero VAD')
+    stt = AsyncSTT(sample_rate=48000,num_channels=2,captureDir='test2/blah')
+    AsyncSTT.preload_shared_resources()
 
-            # asr = pipeline("automatic-speech-recognition",model="openai/whisper-large-v3",device=0)
-            # asr = pipeline("automatic-speech-recognition",model="openai/whisper-tiny.en",device=0)
-            asr = pipeline("automatic-speech-recognition",model="openai/whisper-tiny",device='cpu')
-            print('Starting Whisper',asr)
-            buffers = {} # TODO should this be a class variable?
-            runs = {}
-            bargeIn = False
-            silenceCount = 0
-            bargeInCount = 0
+    stt.addListener(lambda s,e,d: print(f"STT Event: {e} {d}"))
 
-            def process(args):
-                # nonlocal bargeIn
-                nonlocal silenceCount
-                # nonlocal bargeInCount
-                buffer, stt, captureDir = args
-                if stt not in buffers:
-                    buffers[stt] = []
-                if stt not in runs:
-                    runs[stt] = []
-                # print('buffer:', buffer.shape, buffer.dtype, stt)
-                buffer = buffer.mean(axis=0) #warning implicit float conversion
-                # buffer = buffer[::self.num_channels]
-                buffer = buffer[::2]
-                # print('buffer mono:', buffer.shape, buffer.dtype)
-                # ratio = self.whisper_sample_rate / self.sample_rate
-                # ratio = 16000 / 48000
-                #TODO this is a hack to get the ratio right
-                ratio = 16000 / 48000
+    audio_file = '/home/jr/Downloads/fullcapture.mp3'
+    audio_segment = AudioSegment.from_mp3(audio_file)
 
-                # buffer.astype(np.int16).tofile('foo48.pcm')
-                buffer = resample(buffer, ratio, 'sinc_best')
-                buffer = buffer.astype(np.int16)
-                # print('resampled buffer:', buffer.shape, buffer.dtype)
+    # Print some information about the audio file
+    print(f"Duration: {audio_segment.duration_seconds} seconds")
+    print(f"Channels: {audio_segment.channels}")
+    print(f"Frame rate: {audio_segment.frame_rate} Hz")
 
-                float_buffer2 = buffer.astype(np.float32) / np.iinfo(np.int16).max
-                # print('float_buffer2:', float_buffer2.shape, float_buffer2.dtype)
-                float_buffer2 = float_buffer2.reshape(-1,512)
-                # print('float_buffer2a:', float_buffer2.shape, float_buffer2.dtype)
-                p = model(torch.from_numpy(float_buffer2),16000)
-                # print('VAD:', p.shape, p)
-                p = torch.all(p<0.25)
-                # print('VAD2:', p)
+    # Get the raw audio data as a bytestring
+    raw_data = audio_segment.raw_data
 
+    # Convert the raw data to a numpy array
+    buffer = np.frombuffer(raw_data, dtype=np.int16)
 
-                # Silence detection
-                rms = np.sqrt(np.mean(buffer**2))
-                # silence_threshold = 600  # Adjust this threshold as needed
-                silence_threshold = 5  # Adjust this threshold as needed
-                # print('rms:', rms)
+    # Print some information about the buffer
+    print(f"Buffer shape: {buffer.shape}")
+    print(f"Buffer dtype: {buffer.dtype}")
 
-                is_silent = rms < silence_threshold
-                # is_silent = False
+    # buffer: (1, 15360) int16   48000
 
-                if not is_silent:
-                    is_silent = p # noisy but no voice detected
+    chunksize = 15360
 
-                if not is_silent:
-                    silenceCount = 0
-                    runs[stt].append(buffer)
-                else:
-                    silenceCount = silenceCount + 1
-                    if len(runs[stt]) >= 2:
-                        buffers[stt].extend(runs[stt])
-                        # print('Buffering audio', len(buffers[stt]))
-                        # if bargeInCount == 1: # Only send bargeIn once
-                        print('BargeIn detected')
-                        outQ.put(('process',None,stt))                        
-                    runs[stt] = []
+    for c in range(0,buffer.shape[0],chunksize):
+        chunk = buffer[c:c+chunksize]
+        if chunk.shape[0] < chunksize:
+            chunk = np.pad(chunk, (0, chunksize - chunk.shape[0]), 'constant')
+        chunk = chunk.reshape(1,chunksize)
+        # print(f"Chunk shape: {chunk.shape}")
+        # await w.send('process',(chunk,0,'test/blah'))
+        # w.inQ.put(('process',(chunk,stt.id,'test/blah')))
+        stt.processBuffer(chunk)
 
-                if silenceCount >= 4 and len(buffers[stt]) >= 2:
-                    # print('Silence detected, skipping processing')
-                    # print('Processing buffered audio', len(Worker.bbuffer))
-                    buffer = np.concatenate(buffers[stt], axis=0)
-                    print('buffer2:', buffer.shape, buffer.dtype)
-                    float_buffer = buffer.astype(np.float32) / np.iinfo(np.int16).max
-                    # print('float_buffer:', float_buffer.shape, float_buffer.dtype)
-
-                    # create file name with date and time
-                    
-                    now = datetime.datetime.now()
-                    # filename = 
-                    # if not os.path.exists('recordings'):
-                    #     os.makedirs('recordings')
-
-                    filename = f'{captureDir}/{now.strftime("%Y%m%d-%H%M%S")}.mp3'
-                    audio_segment = AudioSegment(
-                        buffer.tobytes(), 
-                        frame_rate=16000,
-                        sample_width=2,  # 2 bytes for 16-bit audio
-                        channels=1
-                    )
-
-                    # Export the AudioSegment to an MP3 file
-                    audio_segment.export(filename, format="mp3")
-
-                    t = asr(float_buffer)
-                    # print('stt:', t)
-                    outQ.put(('process',t,stt))
-                    buffers[stt] = []
-                    # bargeIn = False
-                    # if stt.llm:
-                    #     asyncio.get_event_loop().create_task(stt.llm.prompt(t['text']))
-                    
-                # else:
-                #     buffers[stt].append(buffer)
-                #     print('Buffering audio', len(buffers[stt]))
-                #     if bargeInCount == 1: # Only send bargeIn once
-                #         print('BargeIn detected')
-                #         outQ.put(('process',None,stt))
-
-            while True:
-                command, args = inQ.get()
-                if command == 'stop':
-                    break
-                elif command == 'process':
-                    process(args)
-                # elif command == 'stt':
-                #     outQ.put((asr(args[0])))
-        except KeyboardInterrupt: # TODO does this get hit
-            pass
-        log.info('Exiting Whisper Loop')
-
-    async def stop(self):
-        self.inQ.put(('stop',''))
-        self.p.join()
-        self.inQ.close()
-        self.outQ.close()
-
-# TODO could make this async?
-def startWhisper():
-    global w
-    w = Worker()
-    asyncio.get_event_loop().create_task(process_out_queue(w.outQ))
-
-async def stopWhisper():
-    global w
-    if w:
-        log.info('Stopping Whisper')
-        await asyncio.get_event_loop().run_in_executor(None, w.outQ.put, ('stop', '', ''))
-        await w.stop()
-        w = None
-
+    # asyncio.get_event_loop().run_until_complete(stopWhisper())
+    # asyncio.get_event_loop().run_forever()
+    try:
+        asyncio.get_event_loop().run_forever()
+    except KeyboardInterrupt:
+        pass
+    # asyncio
+    # await stopWhisper()
+    print('Done')

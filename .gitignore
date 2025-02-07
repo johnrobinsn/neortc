@@ -9,3 +9,5 @@ api_key_openai.py
 openai_agent/openai_chats
 openai_agent/llama_chats
 openai_agent/recordings
+openai_agent/test
+openai_agent/test2
