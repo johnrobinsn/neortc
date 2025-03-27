@@ -24,3 +24,12 @@ rerankers[transformers]
 sentence-transformers
 tantivy
 termcolor
+git+https://github.com/johnrobinsn/askit.git
+
+# eou
+onnxruntime
+kokoro>=0.3.4
+opuslib
+pyogg #apt install python3-dev libopus0 libopus-dev libopusfile-dev
+
+pyaudio

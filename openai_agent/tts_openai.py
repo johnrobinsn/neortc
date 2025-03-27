@@ -22,21 +22,24 @@ import logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-import struct
+import os
 from time import time
 from datetime import datetime
+import json
 from fractions import Fraction
+import struct
 from asyncio import sleep
+import asyncio
 from aiohttp import ClientSession
-from av import codec
-from av.packet import Packet
-from aiortc.mediastreams import MediaStreamTrack
+# from av import codec
+# from av.packet import Packet
+# from aiortc.mediastreams import MediaStreamTrack
 
 from aconfig import config
 openai_api_key = config.get('openai_api_key')
 
-class TTSTrack:
-    def __init__(self):
+class TTS_OpenAI:
+    def __init__(self, opus_frame_handler=None):
         self.packetq = []
         self.next_pts = 0
         self.silence_duration = 0.02
@@ -47,72 +50,57 @@ class TTSTrack:
         self.gcodec = None
         self.gsample_rate = 0
         self.gchannels = 0
-        self.audioEnabled = False
-        self._createTTSTrack()
+        # self.audioEnabled = False
+        # self._createTTSTrack()
 
         self.text = ''
-        self.muted = False
+        # self.muted = False
+        self.opus_frame_handler = opus_frame_handler
 
-    def mute(self, f):
-        self.muted = f
+    # def mute(self, f):
+    #     self.muted = f
 
-    def clearAudio(self):
-        self.packetq.clear()
-        self.text = ''
+    # def clearAudio(self):
+    #     self.packetq.clear()
+    #     self.text = ''
     
-    def enableAudio(self,f):
-        log.info('enableAudio: %s',f)
-        if not f:
-            self.clearAudio()
-        self.audioEnabled = f
+    # def enableAudio(self,f):
+    #     log.info('enableAudio: %s',f)
+    #     if not f:
+    #         self.clearAudio()
+    #     self.audioEnabled = f
         
     async def say(self,t):
-        if not self.audioEnabled:
-            log.info('audio disabled')
-            return
-        start = datetime.now()
+        # TODO do this on the agent side... 
+        # if not self.audioEnabled:  
+        #     log.info('audio disabled')
+        #     return
+        # start = datetime.now()
         def on_segment(channels, sample_rate, segment):
-            nonlocal start
-            if start:
-                # log.info('time to first segment:', (datetime.now()-start).total_seconds())
-                print('first segment')
-                start = None
-
-            if self.gsample_rate != sample_rate or self.gchannels != channels:
-                self._init_codec(channels, sample_rate)
-
-            sample_count = 0
-            for frame in self.gcodec.decode(Packet(segment)):
-                sample_count += frame.samples
-
-            duration = sample_count / self.gsample_rate
-
-            pts_count = round(duration * self.time_base)
-
-            if not self.muted:
-                self.packetq.insert(0,(duration, pts_count, segment))
+            if self.opus_frame_handler:
+                self.opus_frame_handler(segment)
         await self._requestTTS(t,on_segment)
 
-    async def open(self):
-        self.text = ''
+    # async def open(self):
+    #     self.text = ''
 
-    async def write(self,text):
-        self.text = self.text + text
-        last_newline = max(self.text.rfind('\n'), self.text.rfind('.'))
-        if last_newline != -1:
-            await self.say(self.text[:last_newline + 1])
-            self.text = self.text[last_newline + 1:]
+    # async def write(self,text):
+    #     self.text = self.text + text
+    #     last_newline = max(self.text.rfind('\n'), self.text.rfind('. '))
+    #     if last_newline != -1:
+    #         await self.say(self.text[:last_newline + 1])
+    #         self.text = self.text[last_newline + 1:]
         
-    async def close(self):
-        if self.text.strip():
-            await self.say(self.text)
-        self.txt = ''
+    # async def close(self):
+    #     if self.text.strip():
+    #         await self.say(self.text)
+    #     self.text = ''
 
-    def getTrack(self):
-        return self.ttsTrack
+    # def getTrack(self):
+    #     return self.ttsTrack
     
     ## -------------- internal impl --------------
-
+    # TODO move OggProcessor to tts_utils.py
     class _OggProcessor:
         pageMagic = struct.unpack('>I', b'OggS')[0]
         headerMagic = struct.unpack('>Q', b'OpusHead')[0]
@@ -166,9 +154,10 @@ class TTSTrack:
                         return # wait for more data
                     
                     page = self.buffer[i:i+pageSize]
-                    if self.headerMagic == struct.unpack_from('>Q',page,headerSize)[0]:
+                    pageDataSize = len(page)-headerSize
+                    if pageDataSize >= 8 and self.headerMagic == struct.unpack_from('>Q',page,headerSize)[0]:
                         self.onMetaPage(page,headerSize)
-                    elif self.commentMagic == struct.unpack_from('>Q',page,headerSize)[0]:
+                    elif pageDataSize >= 8 and self.commentMagic == struct.unpack_from('>Q',page,headerSize)[0]:
                         pass # we don't do anything with comment pages
                     else: # Assume audio page
                         self.onPage(page,headerSize,segmentSizes)
@@ -177,68 +166,6 @@ class TTSTrack:
                     i = 0
                     continue
                 i = i + 1
-
-    def _createTTSTrack(self):
-        def get_silence_packet(duration_seconds):
-            chunk = bytes.fromhex('f8 ff fe')
-
-            pkt = Packet(chunk)
-            pkt.pts = self.next_pts
-            pkt.dts = self.next_pts
-            pkt.time_base = self.time_base_fraction
-
-            pts_count = round(duration_seconds * self.time_base)
-            self.next_pts += pts_count
-
-            return pkt
-
-        # if we we have audio queued deliver that; otherwise silence
-        def get_audio_packet():
-            if len(self.packetq) > 0:
-                try:
-                    duration,pts_count,chunk = self.packetq.pop()
-
-                    pkt = Packet(chunk)
-                    pkt.pts = self.next_pts
-                    pkt.dts = self.next_pts
-                    pkt.time_base = self.time_base_fraction
-
-                    self.next_pts += pts_count
-
-                    return pkt,duration
-                except:
-                    pass # Ignore Empty exception
-
-            return get_silence_packet(self.silence_duration), self.silence_duration    
-
-        class tts_track(MediaStreamTrack):
-            kind = "audio"
-            
-            def __init__(self):
-                super().__init__()
-                self.stream_time = None
-                log.info('create tts_track')
-
-            async def close(self):
-                super().stop()
-
-            async def recv(self):
-                try: # exceptions that happen here are eaten... so log them
-                    packet, duration = get_audio_packet()
-
-                    if self.stream_time is None:
-                        self.stream_time = time()
-
-                    wait = self.stream_time - time()
-                    await sleep(wait)
-
-                    self.stream_time += duration
-                    return packet
-                except Exception as e:
-                    log.error('Exception:', e)
-                    raise
-
-        self.ttsTrack = tts_track()
 
     # invoke OpenAI's TTS API with the provided text(t)
     # and process the returned Opus stream
@@ -258,25 +185,69 @@ class TTSTrack:
             'speed': 1.0
         }
 
+        oggFileData = bytearray()
+
         async with ClientSession() as session:
             async with session.post(url=url,json=data,headers=headers,chunked=True) as response:
 
                 def new_path(segment, meta):
                     callback(meta['channelCount'],meta['sampleRate'],segment)
 
-                oggProcessor = TTSTrack._OggProcessor(new_path)
+                oggProcessor = TTS_OpenAI._OggProcessor(new_path)
                 if response.status != 200:
                     log.error('OpenAI TTS Call Failed Status:', response.status)
                 async for data in response.content.iter_chunked(16384):
-                    oggProcessor.addBuffer(data)                                   
+                    oggProcessor.addBuffer(data)
+                    oggFileData.extend(data)
 
-    def _init_codec(self,channels, sample_rate):
+                dir = f'dictations/{datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")}'
+                os.makedirs(dir, exist_ok=True)
+                metadata = {'text': t, 
+                            'model': 'tts-1', 'voice': 'echo', 'speed': 1.0, 
+                            'timestamp': datetime.utcnow().isoformat()
+                        }
+                metadata_path = os.path.join(dir, 'metadata.json')
+                with open(metadata_path, 'w') as f:
+                    json.dump(metadata, f, indent=2)
+                oggfile_path = os.path.join(dir, 'output.ogg')
+                with open(oggfile_path, 'wb') as f:
+                    f.write(oggFileData)
 
-        self.gcodec = codec.CodecContext.create('opus', 'r')
+## -------------- main --------------
 
-        self.gcodec.sample_rate = sample_rate
-        self.gcodec.channels = channels
+def main():
+    import aiofiles
+    import sys
+    from termcolor import colored
 
-        self.gsample_rate = sample_rate
-        self.gchannels = channels
+    # load_dotenv(".env.local")
 
+    from tts_utils import OpusStreamPlayer
+
+    opus_player = OpusStreamPlayer()
+
+    def opus_frame_handler(opus_frame):
+        opus_player.write(bytearray(opus_frame)) # TODO should byte array be pushed down to the player?
+
+    print(colored(f'TTS_OpenAI', 'cyan'))
+
+    tts = TTS_OpenAI(opus_frame_handler=opus_frame_handler)
+
+    async def read_lines():
+
+        await tts.say('The sky above the port was the color of television, tuned to a dead channel.')
+        await tts.say('hello world hello world hello world')    
+
+        async with aiofiles.open('/dev/stdin', mode='r') as f:
+            print(colored("> ","yellow"), end="")
+            sys.stdout.flush()
+            async for line in f:    
+                # print(colored(await askit.prompt1(line.strip(), moreTools=[get_current_location]),"green"))
+                await tts.say(line.strip())
+                print(colored("> ","yellow"), end="")
+                sys.stdout.flush()
+
+    asyncio.run(read_lines())
+
+if __name__ == '__main__':
+    main()

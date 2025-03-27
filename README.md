@@ -99,3 +99,70 @@ wrapping socketio decorator in class
 https://github.com/miguelgrinberg/python-socketio/issues/390
 
 https://stackoverflow.com/questions/38867763/why-i-have-to-open-data-channel-before-send-peer-connection-offer
+
+
+alternative ogg streaming...
+
+import logging
+import asyncio
+import aiohttp
+import pyogg
+import sounddevice as sd
+import opuslib
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+class StreamingOpusClient:
+    def __init__(self, sample_rate=48000, channels=1):
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.decoder = opuslib.Decoder(sample_rate, channels)
+
+    async def fetch_and_play(self, text):
+        async with aiohttp.ClientSession() as session:
+            async with session.post('https://api.openai.com/v1/tts', json={'text': text}) as response:
+                if response.status != 200:
+                    log.error(f"Failed to fetch TTS data: {response.status}")
+                    return
+
+                ogg_stream = OggStream(self.decoder)
+                async for chunk in response.content.iter_chunked(4096):
+                    ogg_stream.process_chunk(chunk)
+
+    def process_pcm(self, pcm_data):
+        # Play PCM data
+        sd.play(pcm_data, samplerate=self.sample_rate, channels=self.channels)
+
+class OggStream:
+    def __init__(self, decoder):
+        self.decoder = decoder
+        self.buffer = b""
+        self.pages = []
+
+    def process_chunk(self, chunk):
+        self.buffer += chunk
+        while True:
+            page, self.buffer = self._extract_page(self.buffer)
+            if page is None:
+                break
+            self.pages.append(page)
+            self._process_page(page)
+
+    def _extract_page(self, buffer):
+        try:
+            page = pyogg.OggPage(buffer)
+            return page, buffer[page.header_len + page.body_len:]
+        except pyogg.OggError:
+            return None, buffer
+
+    def _process_page(self, page):
+        pcm_data = self.decoder.decode(page.body, frame_size=960)
+        sd.play(pcm_data, samplerate=self.decoder.sample_rate, channels=self.decoder.channels)
+
+async def main():
+    client = StreamingOpusClient()
+    await client.fetch_and_play("Hello, this is a test of the streaming Opus client.")
+
+if __name__ == "__main__":
+    asyncio.run(main())

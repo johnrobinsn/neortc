@@ -235,11 +235,11 @@ class LLM(ILLM):
         # ask model to summarize conversation
         summary = await self.summarize()
         print("Summary:", summary)
-        # if self.summary != summary:
-        self.summary = summary
-        # always notify because the log has been modified (sort order etc
-        await self.notifyMetaDataChanged()
-        self.save()
+        if self.summary != summary:
+            self.summary = summary
+            # always notify because the log has been modified (sort order etc
+            await self.notifyMetaDataChanged()
+            self.save()
 
     async def openEntry(self, role):
         self._bargeIn = False
@@ -294,13 +294,15 @@ class LLM(ILLM):
                 },
             ],
         })
-        # response = await LLM.client.chat.completions.create(
-        #     model="gpt-4-1106-preview",
-        #     messages=log,
-        # )
-        # response_message = response.choices[0].message
-        # return response_message.content  
-        return await self.promptFunc(log)             
+        #TODO should be externalized
+        response = await LLM.client.chat.completions.create(
+            model="gpt-4-1106-preview",
+            messages=log,
+        )
+        response_message = response.choices[0].message
+        return response_message.content  
+        # return await self.promptFunc(log)             
+        # return "Summary disabled"
 
     async def prompt(self,t):
         await self.promptQ.put(t)

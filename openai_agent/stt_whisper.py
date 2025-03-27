@@ -31,6 +31,10 @@ from pydub import AudioSegment
 
 from stt_whisper_sync import STT
 
+import weakref
+
+import atexit
+
 #TODO... 
 # state change for when model is loaded and ready
 
@@ -44,9 +48,18 @@ class AsyncSTT(STT):
         self.w = ThreadWorker(supportOutQ=False)
         self.shared_lock = threading.Lock()
         self.loop = asyncio.get_event_loop()
+        # self._finalizer = weakref.finalize(self, self._cleanup)
+        # # Register the atexit cleanup with a weak reference
+        # self_ref = weakref.ref(self)
+        # atexit.register(lambda: self_ref() and self_ref()._cleanup())
 
-    def __del__(self):
+    def _cleanup(self):
+        # cleanup the shared resources used by the parent class
+        print('AsyncSTT cleanup')
         self.w.stop()
+
+    # def __del__(self):
+    #     self.w.stop()
 
     @staticmethod
     def preload_shared_resources():
@@ -72,15 +85,42 @@ class AsyncSTT(STT):
         # dispatch processBuffer to threadworker
         self.w.add_task(self.super_processBuffer, buffer)
 
-if __name__ == "__main__":
+    def super_flush(self, newCaptureDir=None):
+        # use a lock to protect the shared resources used by the parent class
+        with self.shared_lock:
+            return super().flush(newCaptureDir)
 
-    stt = AsyncSTT(sample_rate=48000,num_channels=2,captureDir='test2/blah')
+    def flush(self,newCaptureDir=None):
+        # dispatch flush to threadworker
+        self.w.add_task(self.super_flush, newCaptureDir)
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) < 2:
+        print("Usage: python stt_whisper.py <audio_file>")
+        sys.exit(1)
+
+    audio_file = sys.argv[1]
+    # audio_file = '/home/jr/Downloads/fullcapture.mp3'
+
+    loop = asyncio.get_event_loop()
+
+    try:
+        audio_segment = AudioSegment.from_mp3(audio_file)
+    except Exception as e:
+        print('Failed to load audio file:',e)
+        sys.exit(1)
+
+    stt = AsyncSTT(sample_rate=48000,num_channels=2,captureDir='test/blah',enableFullCapture=True)
     AsyncSTT.preload_shared_resources()
 
-    stt.addListener(lambda s,e,d: print(f"STT Event: {e} {d}"))
-
-    audio_file = '/home/jr/Downloads/fullcapture.mp3'
-    audio_segment = AudioSegment.from_mp3(audio_file)
+    # stt.addListener(lambda s,e,d: print(f"STT Event: {e} {d}"))
+    def listener(s,e,d):
+        print(f"STT Event: {e} {d}")
+        if e == 'flushed':
+            loop.stop()
+    stt.addListener(listener)
 
     # Print some information about the audio file
     print(f"Duration: {audio_segment.duration_seconds} seconds")
@@ -110,13 +150,44 @@ if __name__ == "__main__":
         # await w.send('process',(chunk,0,'test/blah'))
         # w.inQ.put(('process',(chunk,stt.id,'test/blah')))
         stt.processBuffer(chunk)
+    print('before flush')
+    stt.flush()
 
     # asyncio.get_event_loop().run_until_complete(stopWhisper())
     # asyncio.get_event_loop().run_forever()
+    # async def shutdown(loop):
+    #     await asyncio.sleep(30)
+    #     loop.stop()
+    #     stt.flush()
+
+
+    # loop.create_task(shutdown(loop))
     try:
-        asyncio.get_event_loop().run_forever()
+        loop.run_forever()
     except KeyboardInterrupt:
         pass
+
+    async def shutdown(loop):
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+
+        [task.cancel() for task in tasks]
+
+        print(f"Cancelling {len(tasks)} outstanding tasks")
+        await asyncio.gather(*tasks, return_exceptions=True)
+        loop.stop()
+
+    loop.run_until_complete(shutdown(loop))
+    loop.close()
+    stt._cleanup()  # TODO... hack to cleanup the threadworker
+
     # asyncio
     # await stopWhisper()
+    # try:
+    #     loop.run_until_complete(main())
+    # except KeyboardInterrupt:
+    #     pass        
+    # finally:
+    #     loop.run_until_complete(shutdown(loop))
+    #     loop.close()
+
     print('Done')

@@ -25,10 +25,14 @@ import signal
 import traceback
 import json
 import asyncio
+from asyncio import sleep
+from time import time
 from socketio import AsyncClient
 from aiortc import RTCSessionDescription, RTCPeerConnection, RTCConfiguration, RTCIceServer
 from aiortc.sdp import candidate_from_sdp
-from aiortc.mediastreams import MediaStreamError
+from aiortc.mediastreams import MediaStreamError, MediaStreamTrack
+from av.packet import Packet
+from fractions import Fraction
 import numpy as np
 from termcolor import colored
 
@@ -48,11 +52,129 @@ enableSTT = True
 if enableSTT:
     from stt_whisper import AsyncSTT
 if enableTTS:
-    from tts_openai import TTSTrack
+    # from tts_openai import TTS_OpenAI
+    from tts_kokoro import Async_TTS_Kokoro
 
 # for each context
 if enableLLM:
     from llm import LLM
+
+class TTSTrack:
+    def __init__(self):
+        def opus_frame_handler(opus_frame):
+            if not self.muted:
+                self.packetq.insert(0,opus_frame)  # TODO should make contract be opus_frame, channels, ?? sample_rate
+        # self.tts = TTS_OpenAI(opus_frame_handler=opus_frame_handler)
+        self.tts = Async_TTS_Kokoro(opus_frame_handler=opus_frame_handler)
+        self.text = ''
+        self.muted = False
+        self.packetq = []
+        self.audioEnabled = False
+        self.next_pts = 0
+        self.silence_duration = 0.02
+
+        self.time_base = 48000
+        self.time_base_fraction = Fraction(1, self.time_base)        
+        self._createTTSTrack()        
+
+    def mute(self, f):
+        self.muted = f
+
+    def clearAudio(self):
+        self.packetq.clear()
+        self.text = ''
+    
+    def enableAudio(self,f):
+        log.info('enableAudio: %s',f)
+        if not f:
+            self.clearAudio()
+        self.audioEnabled = f
+                
+    async def open(self):
+        self.text = ''
+
+    async def write(self,text):
+        self.text = self.text + text
+        last_newline = max(self.text.rfind('\n'), self.text.rfind('. '))
+        if last_newline != -1:
+            await self._say(self.text[:last_newline + 1])
+            self.text = self.text[last_newline + 1:]
+        
+    async def close(self):
+        if self.text.strip():
+            await self._say(self.text)
+        self.text = ''        
+
+    async def _say(self,text):        
+        if self.audioEnabled:
+            await self.tts.say(text)
+
+    def getTrack(self):
+        return self.ttsTrack
+    
+    def _createTTSTrack(self):
+        def get_silence_packet(duration_seconds):
+            chunk = bytes.fromhex('f8 ff fe')
+
+            pkt = Packet(chunk)
+            pkt.pts = self.next_pts
+            pkt.dts = self.next_pts
+            pkt.time_base = self.time_base_fraction
+
+            pts_count = round(duration_seconds * self.time_base)
+            self.next_pts += pts_count
+
+            return pkt
+
+        # if we we have audio queued deliver that; otherwise silence
+        def get_audio_packet():
+            if len(self.packetq) > 0:
+                try:
+                    chunk = self.packetq.pop()
+                    duration = 20/1000 # assume 20ms
+                    pts_count = round(duration * 48000) # 48000 is the sample rate and channel = 1
+
+                    pkt = Packet(chunk)
+                    pkt.pts = self.next_pts
+                    pkt.dts = self.next_pts
+                    pkt.time_base = self.time_base_fraction
+
+                    self.next_pts += pts_count
+
+                    return pkt,duration
+                except:
+                    pass # Ignore Empty exception
+
+            return get_silence_packet(self.silence_duration), self.silence_duration    
+
+        class tts_track(MediaStreamTrack):
+            kind = "audio"
+            
+            def __init__(self):
+                super().__init__()
+                self.stream_time = None
+                log.info('create tts_track')
+
+            async def close(self):
+                super().stop()
+
+            async def recv(self):
+                try: # exceptions that happen here are eaten... so log them
+                    packet, duration = get_audio_packet()
+
+                    if self.stream_time is None:
+                        self.stream_time = time()
+
+                    wait = self.stream_time - time()
+                    await sleep(wait)
+
+                    self.stream_time += duration
+                    return packet
+                except Exception as e:
+                    log.error('Exception:', e)
+                    raise
+
+        self.ttsTrack = tts_track()    
 
 class Peer:
     peerIndex = 0
@@ -73,7 +195,7 @@ class Peer:
         async def sttListener(s,e,d):
             if self.context:
                 if e == 'final_transcript':
-                    await self.context.prompt(d)
+                    await self.context.prompt(d['transcript'])
                 elif e == 'voice_was_detected':
                     await self.context.bargeIn()
                     # TODO do I need mute and clearAudio both?
@@ -310,7 +432,7 @@ class Agent:
 
     nextContextId=0
 
-    def __init__(self,promptFunc,agentName,promptStreamingFunc=None):
+    def __init__(self,promptFunc,agentName,promptStreamingFunc=None,initialPrompt=None):
         self.promptFunc = promptFunc
         self.promptStreamingFunc = promptStreamingFunc
         self.agentName = agentName
@@ -323,8 +445,9 @@ class Agent:
 
         self.listener = None
 
-        self.contexts = self.loadAll()
         self.peers = {}
+        self.initialPrompt = initialPrompt
+        self.contexts = self.loadAll()
 
     def name(self):
         # TODO use hostname
@@ -339,7 +462,7 @@ class Agent:
             files = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
             for index, file in enumerate(files, start=1):
                 print(f"{index}. {file}")
-                l = LLM(self.promptFunc,self.agentName,self.promptStreamingFunc)
+                l = LLM(self.promptFunc,self.agentName,self.promptStreamingFunc,self.initialPrompt)
                 l.load(f'{dir}/{file}')
                 c[l.id] = l
                 # TODO can we get rid of all this in agent
@@ -356,7 +479,7 @@ class Agent:
         if cid in self.contexts:
             return self.contexts[cid]
         else:
-            l = LLM(self.promptFunc,self.agentName,self.promptStreamingFunc)
+            l = LLM(self.promptFunc,self.agentName,self.promptStreamingFunc,self.initialPrompt)
             self.contexts[l.id] = l
             async def onContextMetaDataChanged(m):
                 # garbage collecting
@@ -486,7 +609,7 @@ def handle_sigint(loop):
     # for task in asyncio.all_tasks(loop):
     #     task.cancel()
 
-def startAgent(promptFunc,agentName,promptStreaming=None):
+def startAgent(promptFunc,agentName,promptStreaming=None,initialPrompt=None):
     global agent # TODO ick
 
     loop = asyncio.get_event_loop()
@@ -501,7 +624,7 @@ def startAgent(promptFunc,agentName,promptStreaming=None):
     else:
         log.info('Attempting connection to %s', signal_server)
     try:
-        agent = Agent(promptFunc,agentName,promptStreaming)
+        agent = Agent(promptFunc,agentName,promptStreaming,initialPrompt)
         loop.run_until_complete(agent.start(signal_server))
     except asyncio.CancelledError:
         print("Application is shutting down2...")

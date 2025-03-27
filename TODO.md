@@ -1,5 +1,7 @@
 # TODO
 
+cleanup plugin naming conventions async/sync tts stt etc...
+
 -[X] bargeIn is not working
 stt.clearAudio is not quite what I want... I want to cancel all submtted llm streaming requests to stt... 
 
@@ -35,6 +37,9 @@ is a trigger a kind of prompt... alarm or external event is like a trigger
 
 
 ## General
+- [ ] better output handling for code and structued output
+- [ ] better UI handling for graphical things like image generation
+- [ ] try app generation and code generation
 - [ ] better status reporting in client when doing large model loads
 - [ ] record at max frequency.  and record at whisper frequency for debugging
 - [ ] break out css and organize

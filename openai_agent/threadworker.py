@@ -20,10 +20,11 @@ class ThreadWorker:
         self.inQ = queue.Queue()
         self.outQ = queue.Queue() if supportOutQ else None
         self.thread = threading.Thread(target=self.worker)
+        self.stopped = False
         self.thread.start()
 
     def worker(self):
-        while True:
+        while not self.stopped:
             item = self.inQ.get()
             if item is None:
                 break
@@ -37,6 +38,7 @@ class ThreadWorker:
                     self.outQ.put(e)
             finally:
                 self.inQ.task_done()
+        print('worker thread loop exited')
 
     def add_task(self, func, *args, **kwargs):
         self.inQ.put((func, args, kwargs))
@@ -45,5 +47,7 @@ class ThreadWorker:
         return self.outQ.get() if self.outQ else None
 
     def stop(self):
+        self.stopped = True
         self.inQ.put(None)
         self.thread.join()
+        print('thread stop complete')

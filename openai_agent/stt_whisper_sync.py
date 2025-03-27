@@ -15,7 +15,7 @@
 import os
 import datetime
 import logging
-#logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 # logging.getLogger("transformers").setLevel(logging.ERROR)
@@ -35,6 +35,9 @@ from enum import Enum, auto
 from typing import Dict, Tuple
 from dataclasses import dataclass
 from typing import Callable, Optional
+import json
+
+from eou import create_eou
 
 # Guidance
 # This is intended to be the base level STT module
@@ -50,12 +53,15 @@ class STT:
         self.sample_rate = sample_rate
         self.num_channels = num_channels
 
-        self.captureDir = captureDir 
-
         self.statemachine = self.createStateMachine()
         self.segment = []
+        self.captureDir = captureDir 
         self.enableFullCapture = enableFullCapture
         self.fullCapture = []
+        self.captureData = {'segments':[]}
+        self.captureTime = 0.0
+        self.segmentTimeBegin = 0.0
+        self.segmentTimeEnd = 0.0
 
     shared_resources = {}
 
@@ -71,9 +77,16 @@ class STT:
 
         if 'asr' not in STT.shared_resources:
             log.info('Loading Whisper')
-            asr = pipeline("automatic-speech-recognition",model="openai/whisper-tiny.en",device='cpu')
+            # asr = pipeline("automatic-speech-recognition",model="openai/whisper-tiny.en",device='cpu')
+            asr = pipeline("automatic-speech-recognition",model="openai/whisper-medium.en",device='cuda')
             STT.shared_resources['asr'] = asr
             log.info('Loaded Whisper')
+
+        if 'eou' not in STT.shared_resources:
+            log.info('Loading EOU')
+            eou = create_eou()
+            STT.shared_resources['eou'] = eou
+            log.info('Loaded EOU')
 
     @staticmethod
     def unload_shared_resources():
@@ -113,8 +126,23 @@ class STT:
             def __init__(self):
 
                 def process_segment(s,b):
+                    s.append(b)
+                    stt.segmentTimeEnd = stt.captureTime + 160.0/1000.0
                     buffer = np.concatenate(s, axis=0)
                     float_buffer = buffer.astype(np.float32) / np.iinfo(np.int16).max
+
+                    # TODO need to make sure that we don't pass in more than 30 seconds worth of audio to whisper
+                    asr = STT.shared_resources['asr']
+                    t = asr(float_buffer)['text']
+
+                    eou = STT.shared_resources['eou']
+                    e = eou(t)
+                    # print('eou:',e, 'text:',t)
+                    if e < 0.15 and self.eou_counter < 3:
+                        self.state = STT.State.SEGMENT_N
+                        # print('Listening for longer eou:',e, self.eou_counter)
+                        self.eou_counter += 1
+                        return
 
                     if stt.captureDir is not None:
                         try:
@@ -131,21 +159,31 @@ class STT:
 
                             # Export the AudioSegment to an MP3 file
                             audio_segment.export(filename, format="mp3")
+
+                            stt.captureData['segments'].append({
+                                'begin': stt.segmentTimeBegin,
+                                'end': stt.segmentTimeEnd,
+                                'filename': filename,
+                                'text': t
+                            })
                         except Exception as e:
                             log.error(f"Error saving audio file (segment): {e}")
 
-                    asr = STT.shared_resources['asr']
-                    t = asr(float_buffer)
-
                     stt.notifyListeners('voice_not_detected',None)     
-                    stt.notifyListeners('final_transcript',t['text'])  #todo stt id not being passed
+                    stt.notifyListeners('final_transcript',{'timeBegin':stt.segmentTimeBegin,'timeEnd':stt.segmentTimeEnd,'transcript':t})  #todo stt id not being passed
                     s.clear()
+
+                def capture_segment(s,b):
+                    s.append(b)
+                    stt.segmentTimeBegin = stt.captureTime
 
                 def voice_was_detected(s,b):
                     s.append(b)
-                    stt.notifyListeners('voice_was_detected',None)               
+                    stt.notifyListeners('voice_was_detected',None)
+                    self.eou_counter = 0               
 
                 self.state = STT.State.IDLE
+                self.eou_counter = 0
                 
                 # Define transitions with actions
                 self.transitions: Dict[Tuple[STT.State, STT.Event], Transition] = {
@@ -155,7 +193,8 @@ class STT:
                     ),            
                     (STT.State.IDLE, STT.Event.VOICE_WAS_DETECTED): Transition(
                         STT.State.SEGMENT_0, 
-                        lambda s, b: s.append(b)
+                        # lambda s, b: s.append(b)
+                        lambda s, b: capture_segment(s,b)
                     ),
                     (STT.State.SEGMENT_0, STT.Event.VOICE_NOT_DETECTED): Transition(
                         STT.State.IDLE,
@@ -205,18 +244,24 @@ class STT:
                     return
                 
                 transition = self.transitions[(self.state, event)]
-                old_state = self.state
+                # old_state = self.state
                 self.state = transition.next_state
                 
                 # log.info(f"Transition: {old_state.name} -> {self.state.name} [Event: {event.name}]")
 
                 # Execute the transition action if it exists
-                if transition.action:
-                    transition.action(*args)
+                try:
+                    if transition.action:
+                        transition.action(*args)
+                except Exception as e:
+                    # log.error(f"Error executing transition action: {e}")
+                    pass
+                # log.info(f"Transition2: {old_state.name} -> {self.state.name} [Event: {event.name}]")
 
         return StateMachine()
     
     def flush(self,newCaptureDir=None):
+        print("in flush", self.captureDir, self.enableFullCapture, len(self.fullCapture))
         if self.captureDir and self.enableFullCapture and len(self.fullCapture) > 0:
             log.info('stt: saving fullcapture')
             try:
@@ -233,12 +278,22 @@ class STT:
 
                 # Export the AudioSegment to an MP3 file
                 audio_segment.export(filename, format="mp3")
+
+                with open(f'{self.captureDir}/fullcapture.json', 'w') as f:
+                    json.dump(self.captureData, f, indent=4)
             except Exception as e:
                 log.error(f"Error saving audio file (fullcapture): {e}")         
 
         self.segment = []
         self.fullCapture = []
+        self.captureData = {'segments':[]}
+        self.captureTime = 0.0
+        self.segmentTimeBegin = 0.0
+        self.segmentCaptureEnd = 0.0
+
         self.statemachine.state = STT.State.IDLE
+
+        self.notifyListeners('flushed',None) 
 
         if newCaptureDir:
             self.captureDir = newCaptureDir
@@ -255,29 +310,40 @@ class STT:
         buffer = resample(buffer, ratio, 'sinc_best')
         buffer = buffer.astype(np.int16)
 
-        float_buffer2 = buffer.astype(np.float32) / np.iinfo(np.int16).max
-        float_buffer2 = float_buffer2.reshape(-1,512)
-
-        # silero vad
-        vad = STT.shared_resources['vad']
-        p = vad(torch.from_numpy(float_buffer2),self.silero_sample_rate)
-        p = torch.all(p<0.25)
-
         # Silence detection
-        rms = np.sqrt(np.mean(buffer.astype(np.float32)**2))
+        float_buffer2 = buffer.astype(np.float32) / np.iinfo(np.int16).max
 
-        silence_threshold = 5  # Adjust this threshold as needed
+        # Calculate the RMS value
+        rms_value = np.sqrt(np.mean(float_buffer2**2))
+
+        # Convert RMS to dB
+        rms_db = 20 * np.log10(rms_value)
+
+        # rms = np.sqrt(np.mean(buffer.astype(np.float32)**2))
+
+        # silence_threshold = 5  # Adjust this threshold as needed
         
-        is_silent = rms < silence_threshold
+        # is_silent = rms < silence_threshold
+
+        is_silent = rms_db < -34
 
         if not is_silent:
+
+            # print('rms:',rms_db)
+
+            # silero vad
+            float_buffer2 = float_buffer2.reshape(-1,512)
+            vad = STT.shared_resources['vad']
+            p = vad(torch.from_numpy(float_buffer2),self.silero_sample_rate)
+            p = torch.all(p<0.25)
             is_silent = p # noisy but no voice detected
 
         self.statemachine.handle_event(STT.Event.VOICE_NOT_DETECTED if is_silent else STT.Event.VOICE_WAS_DETECTED,self.segment,buffer)
+        self.captureTime += 160.0/1000.0
 
 if __name__ == "__main__":
 
-    stt = STT(sample_rate=48000, num_channels=2)
+    stt = STT(sample_rate=48000, num_channels=2, captureDir='test/blah', enableFullCapture=True)
 
     stt.addListener(lambda s,e,d: print(f"STT Event: {e} {d}"))
 
@@ -310,5 +376,6 @@ if __name__ == "__main__":
         chunk = chunk.reshape(1,chunksize)
 
         stt.processBuffer(chunk)
+    stt.flush('test/blah')
 
     print('Done')

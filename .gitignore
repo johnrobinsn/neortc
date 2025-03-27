@@ -11,3 +11,9 @@ openai_agent/llama_chats
 openai_agent/recordings
 openai_agent/test
 openai_agent/test2
+openai_agent/askit_chats
+openai_agent/function_chats
+openai_agent/dictations
+diarize
+openai_agent/test_working
+
